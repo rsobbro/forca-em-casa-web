@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PROGRAM} from '../plan.js';
-import {parseCompletionHash,mergeCompletedSessions} from '../completion-import.js';
+import {parseCompletionHash,mergeCompletedSessions,getMissingScheduledSessions} from '../completion-import.js';
 
 const today='2026-11-18';
 const link='#registrar-treinos=A@2026-11-16,B@2026-11-17';
@@ -40,4 +40,16 @@ test('não sobrescreve sessão detalhada já registrada no mesmo dia',()=>{
   assert.equal(result.added,1);
   assert.equal(result.sessions.length,2);
   assert.deepEqual(result.sessions.find(s=>s.dayId==='A'),existing);
+});
+
+test('lista treinos anteriores da semana sem registrar automaticamente',()=>{
+  const missing=getMissingScheduledSessions(PROGRAM,[],'2026-11-18');
+  assert.deepEqual(missing,[{dayId:'A',date:'2026-11-16'},{dayId:'B',date:'2026-11-17'}]);
+  assert.equal(missing.length,2);
+});
+test('evita duplicatas e não marca dias futuros no registro semanal',()=>{
+  const recorded=[{dayId:'A',date:'2026-11-16',sets:{},id:'x'}];
+  assert.deepEqual(getMissingScheduledSessions(PROGRAM,recorded,'2026-11-18'),[{dayId:'B',date:'2026-11-17'}]);
+  assert.deepEqual(getMissingScheduledSessions(PROGRAM,recorded,'2026-11-17'),[]);
+  assert.deepEqual(getMissingScheduledSessions(PROGRAM,recorded,'2026-11-23'),[]);
 });

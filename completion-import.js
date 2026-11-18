@@ -45,3 +45,19 @@ export function mergeCompletedSessions(sessions,entries,startDate){
   const merged=[...added,...sessions].sort((a,b)=>b.date.localeCompare(a.date));
   return {sessions:merged,added:added.length};
 }
+
+/** Treinos previstos nesta semana que já passaram e ainda não foram registrados. */
+export function getMissingScheduledSessions(program,sessions,today){
+  const date=dateFromISO(today);
+  if(!date||!Array.isArray(sessions))return [];
+  const monday=new Date(date);
+  monday.setDate(monday.getDate()-((monday.getDay()+6)%7));
+  const missing=[];
+  for(const current=new Date(monday);current<date;current.setDate(current.getDate()+1)){
+    const dayId=program.schedule[current.getDay()];
+    if(!dayId)continue;
+    const day=current.getFullYear()+'-'+String(current.getMonth()+1).padStart(2,'0')+'-'+String(current.getDate()).padStart(2,'0');
+    if(!sessions.some(item=>item.date===day&&item.dayId===dayId))missing.push({dayId,date:day});
+  }
+  return missing;
+}
