@@ -23,3 +23,8 @@ test('interface importa módulos de atividades e imagens e preserva dados',()=>{
   assert.ok(js.includes('activities:Array.isArray(d.activities)?d.activities.filter(validActivity):[]'));
   assert.ok(js.includes('activities:imported.activities||[]'));
 });
+
+test('foto fica fora do contêiner de detalhes e cada cartão é encerrado',()=>{
+ const s=readFileSync(new URL('../app.js',import.meta.url),'utf8');
+ assert.ok(s.includes("</div></div></div>${exercisePhotos(ex)}</div>"));
+});
