@@ -9,6 +9,7 @@ Aplicação web responsiva e instalável (PWA) para acompanhar um plano de trein
 - Registro de cada série: repetições, carga ou cor do elástico, esforço percebido e conclusão.
 - Temporizador de descanso, persistência de sessão em andamento, histórico e métricas semanais.
 - Exportação de registros para **CSV** e backup/restore em **JSON**.
+- Registro retroativo de treinos concluídos, sem criar séries ou cargas fictícias. A confirmação ocorre no próprio navegador e preserva o histórico existente.
 - Interface mobile/desktop e funcionamento offline depois do primeiro carregamento em HTTPS.
 - Armazenamento local no navegador, sem login ou servidor.
 
@@ -47,6 +48,7 @@ git push -u origin main
 
 - **Os dados pessoais NÃO são enviados ao GitHub.** O site estático fica público, mas as séries, cargas e datas são armazenadas em `localStorage` no dispositivo/navegador que você utiliza.
 - A limpeza do navegador, navegação anônima ou troca de aparelho pode apagar ou impedir o acesso aos registros locais. Exporte backups JSON regularmente.
+- Links de registro retroativo solicitam confirmação do usuário e gravam somente no navegador que abriu o link. O repositório público não contém o histórico pessoal.
 - **Não existe sincronização entre aparelhos nem autenticação.** Para a V2, use backend com autenticação e regras de acesso adequadas antes de salvar dados na nuvem.
 - A carga das placas da estação e a tensão dos elásticos não são diretamente equivalentes. O sistema não calcula 1RM nem prescreve aumentos automáticos.
 - O programa é uma referência inicial, não substitui avaliação presencial de profissional habilitado.
