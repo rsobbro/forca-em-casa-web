@@ -34,7 +34,8 @@ jobs:
       - name: Preparar os arquivos do site
         run: |
           mkdir -p _site/assets
-          cp index.html styles.css app.js plan.js sw.js manifest.webmanifest .nojekyll _site/
+          cp index.html styles.css app.js plan.js completion-import.js sw.js manifest.webmanifest .nojekyll _site/
+          test -s _site/completion-import.js
           cp assets/* _site/assets/
       - name: Enviar artefato estático
         uses: actions/upload-pages-artifact@v3
