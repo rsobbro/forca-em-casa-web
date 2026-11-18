@@ -76,3 +76,7 @@ assets/                       Ícones
 ## Licença
 
 MIT. Código-fonte reutilizável e sem dependências externas.
+
+## Evolução V1.3 — contagem e múltiplos navegadores
+
+A tela **Evolução** diferencia treinos de musculação e atividades adicionais. Registros manuais de treino concluído contam na frequência, mas não nas séries ou repetições, pois esses dados não foram fornecidos. A opção **Mesclar backup JSON** preserva o histórico do navegador atual, mescla por IDs e evita duplicar um treino manual para a mesma data/divisão. Os dados continuam exclusivamente no localStorage de cada dispositivo; GitHub Pages não sincroniza dados privados automaticamente. Para transferir, exporte JSON no dispositivo de origem e utilize Mesclar backup no dispositivo de destino.
