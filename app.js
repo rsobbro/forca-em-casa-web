@@ -99,7 +99,7 @@ return `${header('PAINEL DE DESEMPENHO','Seu treino, sua evolução.','Um plano 
 function exercisePhotos(ex,compact=false){
  const media=getExerciseMedia(ex.id);if(!media)return '';
  const notice=media.sameEquipment?'Demonstração de referência para este movimento.':'Movimento equivalente: o equipamento da foto pode ser diferente. Siga o equipamento indicado na ficha.';
- const figures=media.urls.map((url,i)=>`<figure class="photo-frame"><img src="${escapeHTML(url)}" alt="${escapeHTML(ex.name)}: ${i===0?'posição inicial':'posição final'}" loading="lazy" decoding="async" width="260" height="160"><figcaption>${i===0?'Posição inicial':'Posição final'}</figcaption></figure>`).join('');
+ const figures=media.urls.map((url,i)=>`<figure class="photo-frame"><a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer" aria-label="Ampliar foto de ${escapeHTML(ex.name)} — ${i===0?'posição inicial':'posição final'}"><img src="${escapeHTML(url)}" alt="${escapeHTML(ex.name)}: ${i===0?'posição inicial':'posição final'}" loading="lazy" decoding="async" width="260" height="160"></a><figcaption>${i===0?'Posição inicial':'Posição final'}</figcaption></figure>`).join('');
  const body=`<div class="exercise-photo-guide"><div class="photo-pair">${figures}</div><p>${escapeHTML(notice)} <a href="${PHOTO_SOURCE}" target="_blank" rel="noopener noreferrer">Fotos: free-exercise-db (Unlicense)</a>.</p></div>`;
  return compact?`<details class="exercise-photo-toggle"><summary>${ico('info',14)} Ver fotos de execução</summary>${body}</details>`:body;
 }
