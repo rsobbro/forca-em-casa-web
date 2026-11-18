@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 test('série com campo vazio não é concluída e mostra aviso local; digitação é salva',async()=>{
  const elements={},handlers={},winListeners={};
- const makeNode=()=>({textContent:'',hidden:true,style:{},classList:{toggle(){},remove(){},add(){}},setAttribute(){},focus(){this.focused=true}});
+ const makeNode=()=>({textContent:'',hidden:true,style:{},classList:{toggle(){},remove(){},add(){}},setAttribute(){},addEventListener(){},focus(){this.focused=true}});
  const feedback=makeNode(),repInput=makeNode(),progress=makeNode(),progressPct=makeNode(),progressFill=makeNode(),finishBtn=makeNode();
  const row={classList:{toggle(){},add(){this.invalid=true},remove(){this.invalid=false}},querySelectorAll:()=>[],querySelector:()=>repInput};
  const group={querySelector:()=>feedback};
