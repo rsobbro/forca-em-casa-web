@@ -18,3 +18,13 @@
 .bar-extra{background:#79b4ec!important}
 .manual-count-notice{border-left:3px solid var(--lime);padding-left:12px;margin:13px 0}
 @media(max-width:640px){.evolution-group-title{align-items:flex-start;flex-direction:column}.evolution-data-notice .button{width:100%}}
+
+/* Usabilidade da sessão, validação visível e atualização sem travamento — V1.3.1 */
+.session-entry-help{background:#172826;border:1px solid #46644a;border-left:4px solid var(--lime);border-radius:12px;padding:13px 16px;margin:0 0 16px;color:#d6e5d6;font-size:12px;line-height:1.7}
+.session-entry-help strong{color:var(--lime)}.session-entry-help b{color:#d8ff9a}
+.set-table input::placeholder{color:#70808a;opacity:1;font-style:italic}
+.set-feedback{margin:11px 0 3px;padding:10px 13px;border-radius:9px;border:1px solid #d19649;background:#332719;color:#ffd6a1;font-size:12px;line-height:1.6;font-weight:700}
+.set-feedback[hidden]{display:none}
+.set-table tr.set-invalid input[data-edit="reps"]{border:2px solid #e9aa4f!important;box-shadow:0 0 0 2px #e9aa4f33}
+.set-table .done-btn{touch-action:manipulation}
+@media(max-width:640px){.session-entry-help{font-size:11px;padding:11px 12px}}
