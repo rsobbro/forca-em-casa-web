@@ -47,12 +47,12 @@ export const EXERCISE_MEDIA = {
     "sameEquipment": false
   },
   "a6": {
-    "label": "Pushups",
+    "label": "Standing Cable Chest Press",
     "images": [
-      "Pushups/0.jpg",
-      "Pushups/1.jpg"
+      "Standing_Cable_Chest_Press/0.jpg",
+      "Standing_Cable_Chest_Press/1.jpg"
     ],
-    "sameEquipment": true
+    "sameEquipment": false
   },
   "b1": {
     "label": "Wide-Grip Lat Pulldown",
@@ -119,10 +119,10 @@ export const EXERCISE_MEDIA = {
     "sameEquipment": true
   },
   "c3": {
-    "label": "Single-Leg Leg Extension",
+    "label": "Squat with Bands",
     "images": [
-      "Single-Leg_Leg_Extension/0.jpg",
-      "Single-Leg_Leg_Extension/1.jpg"
+      "Squat_with_Bands/0.jpg",
+      "Squat_with_Bands/1.jpg"
     ],
     "sameEquipment": false
   },
