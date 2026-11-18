@@ -11,6 +11,8 @@ Aplicação web responsiva e instalável (PWA) para acompanhar um plano de trein
 - Exportação de registros para **CSV** e backup/restore em **JSON**.
 - Registro retroativo de treinos concluídos, sem criar séries ou cargas fictícias. A confirmação ocorre no próprio navegador e preserva o histórico existente.
 - Interface mobile/desktop e funcionamento offline depois do primeiro carregamento em HTTPS.
+- Fotos das posições de início e fim para os 32 exercícios de musculação (acervo **yuhonas/free-exercise-db**, Unlicense, fotografias carregadas da internet). Quando a máquina da foto é diferente, siga o equipamento indicado na ficha.
+- Diário complementar para corrida, bike, karatê, natação, caminhada e outras atividades, com data, duração, distância opcional, intensidade e observações, integrado ao histórico e às exportações CSV/JSON.
 - Armazenamento local no navegador, sem login ou servidor.
 
 ## Como abrir localmente
@@ -46,6 +48,7 @@ git push -u origin main
 
 ## Privacidade e limites
 
+- As fotografias exigem conexão com a internet; podem não aparecer offline. Acervo e licença: https://github.com/yuhonas/free-exercise-db .
 - **Os dados pessoais NÃO são enviados ao GitHub.** O site estático fica público, mas as séries, cargas e datas são armazenadas em `localStorage` no dispositivo/navegador que você utiliza.
 - A limpeza do navegador, navegação anônima ou troca de aparelho pode apagar ou impedir o acesso aos registros locais. Exporte backups JSON regularmente.
 - Links de registro retroativo solicitam confirmação do usuário e gravam somente no navegador que abriu o link. O repositório público não contém o histórico pessoal.
