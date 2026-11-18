@@ -13,6 +13,9 @@ Aplicação web responsiva e instalável (PWA) para acompanhar um plano de trein
 - Interface mobile/desktop e funcionamento offline depois do primeiro carregamento em HTTPS.
 - Fotos das posições de início e fim para os 32 exercícios de musculação (acervo **yuhonas/free-exercise-db**, Unlicense, fotografias carregadas da internet). Quando a máquina da foto é diferente, siga o equipamento indicado na ficha.
 - Diário complementar para corrida, bike, karatê, natação, caminhada e outras atividades, com data, duração, distância opcional, intensidade e observações, integrado ao histórico e às exportações CSV/JSON.
+- Auditoria dos **32 exercícios** contra as funções comprovadas da WCT 80 kg, tubos/âncora/tornozeleira TOPSAND, minibands Alegria e solo. Movimentos que pressupunham polia inferior ou cadeira extensora não confirmadas foram substituídos; referências visuais de equipamentos distintos são identificadas.
+- Links para **24 referências verificadas de vídeo do YouTube**, com variantes explicitadas; quando não existe referência específica verificada, oferece pesquisa sem alegar que um vídeo foi localizado.
+- Aba **Avaliação corporal** com peso, altura, cintura, peito, quadril, braço, coxa, panturrilha, pescoço, percentual de gordura informado pelo usuário, comparação de medidas e gráficos de peso e cintura; dados privados apenas no navegador e exportação CSV/JSON.
 - Armazenamento local no navegador, sem login ou servidor.
 
 ## Como abrir localmente
@@ -52,6 +55,7 @@ git push -u origin main
 - **Os dados pessoais NÃO são enviados ao GitHub.** O site estático fica público, mas as séries, cargas e datas são armazenadas em `localStorage` no dispositivo/navegador que você utiliza.
 - A limpeza do navegador, navegação anônima ou troca de aparelho pode apagar ou impedir o acesso aos registros locais. Exporte backups JSON regularmente.
 - Links de registro retroativo solicitam confirmação do usuário e gravam somente no navegador que abriu o link. O repositório público não contém o histórico pessoal.
+- **Não registre medidas pessoais no repositório público.** As avaliações são persistidas apenas em localStorage deste navegador; o código aberto não inclui medidas individuais. Exporte backups localmente e proteja esses arquivos.
 - **Não existe sincronização entre aparelhos nem autenticação.** Para a V2, use backend com autenticação e regras de acesso adequadas antes de salvar dados na nuvem.
 - A carga das placas da estação e a tensão dos elásticos não são diretamente equivalentes. O sistema não calcula 1RM nem prescreve aumentos automáticos.
 - O programa é uma referência inicial, não substitui avaliação presencial de profissional habilitado.
