@@ -1,0 +1,11 @@
+{
+  "name": "forca-em-casa-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Plano de treinamento residencial de 8 semanas",
+  "scripts": {
+    "test": "node --test",
+    "serve": "python -m http.server 8000"
+  }
+}

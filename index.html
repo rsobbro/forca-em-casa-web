@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101820" />
+  <meta name="description" content="Treino de força em casa: plano de oito semanas, registro de séries e acompanhamento de evolução." />
+  <meta name="color-scheme" content="dark" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="./assets/icon.svg" />
+  <link rel="apple-touch-icon" href="./assets/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Força em Casa — Meu treino</title>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard" aria-label="Ir para o início">
+        <span class="brand-symbol">F<span class="brand-dot">.</span></span>
+        <span class="brand-copy">FORÇA EM CASA<small>TRAINING SYSTEM / V1</small></span>
+      </a>
+      <div class="sidebar-label">MENU PRINCIPAL</div>
+      <nav class="side-nav" aria-label="Navegação principal">
+        <a href="#dashboard" data-nav="dashboard" class="nav-link"><span data-nav-icon="dashboard"></span> Visão geral</a>
+        <a href="#treinos" data-nav="treinos" class="nav-link"><span data-nav-icon="treinos"></span> Meus treinos</a>
+        <a href="#evolucao" data-nav="evolucao" class="nav-link"><span data-nav-icon="evolucao"></span> Evolução</a>
+        <a href="#configuracoes" data-nav="configuracoes" class="nav-link"><span data-nav-icon="configuracoes"></span> Configurações</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="equipment-pill"><span class="signal"></span> TREINO DOMÉSTICO</div>
+        <p>WCT Fitness <span>+</span> Elásticos TOPSAND <span>+</span> Minibands Alegria</p>
+        <div class="sidebar-foot">Plano individual · 5 dias/semana</div>
+      </div>
+    </aside>
+    <div class="content-shell">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-symbol">F<span class="brand-dot">.</span></span><span>FORÇA EM CASA</span></div>
+        <div class="topbar-breadcrumb">PERSONAL TRAINING <span>/</span> <strong id="breadcrumb-label">VISÃO GERAL</strong></div>
+        <div class="topbar-right"><span id="top-date"></span><div class="avatar" title="Treino individual">F</div></div>
+      </header>
+      <main id="app-content" tabindex="-1" aria-live="polite"></main>
+      <footer class="app-footer"><span>FORÇA EM CASA · V1.0</span><span>Dados armazenados somente neste navegador.</span></footer>
+    </div>
+  </div>
+  <nav class="mobile-nav" aria-label="Navegação móvel">
+    <a href="#dashboard" data-nav="dashboard"><span data-nav-icon="dashboard"></span><small>Início</small></a>
+    <a href="#treinos" data-nav="treinos"><span data-nav-icon="treinos"></span><small>Treinos</small></a>
+    <a href="#evolucao" data-nav="evolucao"><span data-nav-icon="evolucao"></span><small>Evolução</small></a>
+    <a href="#configuracoes" data-nav="configuracoes"><span data-nav-icon="configuracoes"></span><small>Ajustes</small></a>
+  </nav>
+  <div id="timer" class="timer-bar" hidden aria-live="off"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <input type="file" id="import-file" accept="application/json,.json" hidden />
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
