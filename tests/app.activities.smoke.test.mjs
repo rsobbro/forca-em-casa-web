@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+test('navegação, imagens e atividade extra não alteram musculação',async()=>{
+ const elements={}, handlers={}, listeners={};
+ const el=id=>elements[id] ||= {id,innerHTML:'',textContent:'',hidden:false,dataset:{},value:'',addEventListener(type,fn){if(id==='#app-content')handlers[type]=fn;},click(){}};
+ globalThis.document={querySelector:el,querySelectorAll:()=>[],createElement:()=>({click(){},remove(){}}),body:{append(){}}};
+ const store={};
+ globalThis.localStorage={getItem:k=>store[k]||null,setItem:(k,v)=>{store[k]=v}};
+ globalThis.location={hash:'#dashboard',protocol:'file:'};
+ globalThis.window={addEventListener:(name,fn)=>listeners[name]=fn,scrollTo(){}};
+ globalThis.confirm=()=>true;
+ await import('../app.js');
+ const click=(action,extras={})=>handlers.click({target:{closest:()=>({dataset:{action,...extras}})}});
+ click('view-plans');
+ assert.match(el('#app-content').innerHTML,/photo-frame/);
+ assert.match(el('#app-content').innerHTML,/Posição inicial/);
+ assert.match(el('#app-content').innerHTML,/Posição final/);
+ click('view-activities');
+ assert.match(el('#app-content').innerHTML,/Outras atividades/);
+ for(const [id,value] of Object.entries({'#activity-kind':'corrida','#activity-date':'2026-11-17','#activity-minutes':'42','#activity-distance':'6,5','#activity-intensity':'Moderada','#activity-notes':'Corrida noturna'}))el(id).value=value;
+ click('save-activity');
+ const state=JSON.parse(store['forca-em-casa-v1']);
+ assert.equal(state.activities.length,1);
+ assert.equal(state.activities[0].type,'corrida');
+ assert.equal(state.activities[0].durationMin,42);
+ assert.equal(state.activities[0].distanceKm,6.5);
+ assert.equal(state.activities[0].notes,'Corrida noturna');
+ assert.equal(state.sessions.length,0);
+ assert.match(el('#app-content').innerHTML,/Corrida noturna/);
+ location.hash='#dashboard';listeners.hashchange();
+ assert.match(el('#app-content').innerHTML,/atividades complementares/i);
+});
