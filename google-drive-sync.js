@@ -6,7 +6,8 @@
  */
 export const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 export const GOOGLE_IDENTITY_SCOPES='openid email profile';
-export const GOOGLE_AUTH_SCOPES=GOOGLE_DRIVE_SCOPE+' '+GOOGLE_IDENTITY_SCOPES;
+export const GOOGLE_AUTH_SCOPES=GOOGLE_IDENTITY_SCOPES+' '+GOOGLE_DRIVE_SCOPE;
+export const GOOGLE_LOGIN_SCOPES=GOOGLE_IDENTITY_SCOPES;
 export const DRIVE_PROFILE_NAME='perfil.json';
 export const DRIVE_APP_FOLDER='Força em Casa';
 export const DRIVE_DATA_FOLDER='Dados';
@@ -67,6 +68,42 @@ export function normalizeCloudData(data){
   sessions:data.sessions,activities:data.activities,measurements:data.measurements,active:data.active||null,
   deleted:normalizeDeleted(data.deleted)};
 }
+/** Login: solicita somente dados básicos, nunca acesso ao Drive. */
+export function authorizeIdentity(clientId,googleApi=globalThis.google,fetchImpl=globalThis.fetch){
+ if(!googleClientIdConfigured(clientId))return Promise.reject(new Error('Client ID OAuth não configurado.'));
+ if(!googleApi?.accounts?.oauth2?.initTokenClient)return Promise.reject(new Error('Biblioteca de login Google não carregada.'));
+ if(typeof fetchImpl!=='function')return Promise.reject(new Error('O navegador não permite validação do Gmail.'));
+ return new Promise((resolve,reject)=>{
+  let finished=false;
+  const done=(error,value)=>{
+   if(finished)return;finished=true;
+   if(error)reject(error instanceof Error?error:new Error(String(error)));
+   else resolve(value);
+  };
+  try{
+   const client=googleApi.accounts.oauth2.initTokenClient({
+    client_id:clientId,scope:GOOGLE_LOGIN_SCOPES,
+    callback:async response=>{
+     if(response?.error||!response?.access_token){done(new Error('Login Google não autorizado.'));return;}
+     try{
+      const reply=await fetchImpl('https://www.googleapis.com/oauth2/v3/userinfo',{
+       headers:{Authorization:'Bearer '+response.access_token},cache:'no-store'
+      });
+      if(!reply.ok)throw new Error('O Google não confirmou o login.');
+      const identity=await reply.json();
+      if(identity?.email_verified!==true||typeof identity.sub!=='string'||!identity.email)
+       throw new Error('Conta Google sem Gmail verificado.');
+      done(null,{user:{sub:String(identity.sub),email:identity.email,email_verified:true,
+       name:String(identity.name||'')},accessToken:response.access_token});
+     }catch(error){done(error);}
+    },
+    error_callback:()=>done(new Error('Janela de login Google fechada ou bloqueada.'))
+   });
+   client.requestAccessToken({prompt:'select_account'});
+  }catch(error){done(error)}
+ });
+}
+/** Permissão adicional: somente quando o usuário solicitar salvar no Drive. */
 export function authorizeDrive(clientId,googleApi=globalThis.google){
  if(!googleClientIdConfigured(clientId))return Promise.reject(new Error('Google OAuth Client ID ainda não foi configurado.'));
  const oauth=googleApi?.accounts?.oauth2;
@@ -85,7 +122,7 @@ export function authorizeDrive(clientId,googleApi=globalThis.google){
     error_callback:()=>fail('A janela de autorização foi fechada ou bloqueada.')
    });
    // Always invoked from a user click; no token is persisted.
-   client.requestAccessToken({prompt:'select_account'});
+   client.requestAccessToken({prompt:''});
   }catch{fail('Não foi possível abrir a autorização do Google.')}
  });
 }
