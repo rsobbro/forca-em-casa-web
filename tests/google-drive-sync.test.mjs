@@ -51,7 +51,7 @@ test('OAuth público configurável e permissão mínima',()=>{
 });
 test('autorização usa popup e token em memória sem segredo',async()=>{
  let received;
- const fake={accounts:{oauth2:{initTokenClient(options){received=options;return {requestAccessToken(){options.callback({access_token:'access-abc'})}}}}}};
+ const fake={accounts:{oauth2:{initTokenClient(options){received=options;return {requestAccessToken(){options.callback({access_token:'access-abc',scope:options.scope})}}}}}};
  const token=await authorizeDrive(CLIENT_ID,fake);
  assert.equal(token,'access-abc');
  assert.equal(received.scope,GOOGLE_AUTH_SCOPES);
