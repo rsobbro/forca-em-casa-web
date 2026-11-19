@@ -88,3 +88,10 @@ A tela **Evolução** diferencia treinos de musculação e atividades adicionais
 - Altura informada como **1,73** é convertida para **173 cm**. Peso **83,300** é aceito como 83,3 kg.
 - Estimativa automática de gordura corporal masculina por **RFM** (altura e cintura) e fórmula **US Navy** (altura, cintura na altura do umbigo e pescoço). Não são exames de gordura corporal, e não é feita análise por fotografia. Resultado de exame, quando houver, é registrado separadamente.
 - Referências: Woolcott & Bergman, Scientific Reports 2018 (https://doi.org/10.1038/s41598-018-29362-1) e fórmula circunferencial US Navy publicada em https://pmc.ncbi.nlm.nih.gov/articles/PMC4831679/.
+
+## V1.4.1 — cálculo de gordura corporal automático em tempo real
+- Ao digitar altura (em cm ou metros) e cintura (cm), a avaliação mostra a estimativa **RFM** imediatamente, sem salvar e sem precisar de balança especial.
+- Se a medida do pescoço estiver preenchida, também mostra a estimativa **US Navy**. Quando peso + RFM estão disponíveis, apresenta massa de gordura e massa livre de gordura, ambas estimadas.
+- Valores em cada entrada do histórico são **derivados das medidas daquela avaliação**; podem usar a altura medida em avaliação anterior, mas nunca a cintura/pescoço/peso de outra data. Uma série temporal mostra a tendência do RFM.
+- Não preenche o campo de gordura **medida em exame** com estimativas; esse campo permanece distinto.
+- RFM, US Navy e massa de gordura calculada são aproximações, não diagnóstico ou exame de composição corporal.

@@ -67,3 +67,15 @@
 .body-comparison-table td{color:#c4d2d1}
 @media(max-width:850px){.body-photo-slots,.body-gallery,.body-fat-results{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.body-photo-slots,.body-gallery,.body-fat-results{grid-template-columns:1fr}.body-history-actions{width:100%}.body-photo-slot small{min-height:unset}.body-photo-preview img{max-height:320px}.body-gallery-slot img{max-height:320px}}
+
+/* V1.4.1 — cálculo automático de composição corporal enquanto digita */
+.body-fat-live{margin:20px 0;padding:20px;border:1px solid #517859;border-radius:15px;background:linear-gradient(130deg,#1b342b,#15252b)}
+.body-fat-live .section-head{gap:12px;flex-wrap:wrap}
+.body-fat-live-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:15px 0}
+.body-fat-live-grid>div{background:#101d20;border:1px solid #34594c;border-radius:12px;padding:13px;min-width:0}
+.body-fat-live-grid small{font-size:11px;line-height:1.5;color:#a9beb9;display:block;min-height:42px}
+.body-fat-live-grid strong{font-size:clamp(20px,2.2vw,28px);color:#c8f86c;display:block;line-height:1.4}
+.body-fat-live [data-live-body-fat-status]{font-size:12px;color:#c3d7bd;font-weight:650}
+.body-record-fat{margin:10px 0 2px!important;color:#c8f86c!important;font-size:12px!important;font-weight:650}
+@media(max-width:950px){.body-fat-live-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:550px){.body-fat-live{padding:15px}.body-fat-live-grid>div{padding:11px}.body-fat-live-grid strong{font-size:22px}}
