@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {GOOGLE_DRIVE_SCOPE,GOOGLE_AUTH_SCOPES,googleClientIdConfigured,authorizeDrive,createGoogleDriveClient,detectDataConflicts,drivePhotoName,escapeDriveQuery} from '../google-drive-sync.js';
+import {GOOGLE_DRIVE_SCOPE,GOOGLE_AUTH_SCOPES,GOOGLE_LOGIN_SCOPES,googleClientIdConfigured,authorizeIdentity,authorizeDrive,createGoogleDriveClient,detectDataConflicts,drivePhotoName,escapeDriveQuery} from '../google-drive-sync.js';
 
 const CLIENT_ID='123456789012-this-is-an-oauth-app.apps.googleusercontent.com';
 function mockDrive(){
@@ -100,4 +100,19 @@ test('detecta conflitos de mesmo ID sem sobrescrever os dados',()=>{
  assert.deepEqual(detectDataConflicts(base,structuredClone(base)),[]);
  const different=structuredClone(base);different.sessions[0].sets.ex[0].reps=10;
  assert.deepEqual(detectDataConflicts(base,different),[{section:'sessions',id:'a'}]);
+});
+
+test('login básico solicita somente openid email profile e não cria pastas',async()=>{
+ let scope;
+ const google={accounts:{oauth2:{initTokenClient(opts){
+  scope=opts.scope;return {requestAccessToken(){opts.callback({access_token:'token-login'})}};
+ }}}};
+ const identity=await authorizeIdentity(CLIENT_ID,google,async(url,options)=>{
+  assert.match(url,/userinfo$/);
+  assert.equal(options.headers.Authorization,'Bearer token-login');
+  return new Response(JSON.stringify({sub:'12345678901234567890',email:'pessoa@gmail.com',email_verified:true}),{status:200});
+ });
+ assert.equal(scope,GOOGLE_LOGIN_SCOPES);
+ assert.equal(scope.includes('drive.file'),false);
+ assert.equal(identity.user.email,'pessoa@gmail.com');
 });
