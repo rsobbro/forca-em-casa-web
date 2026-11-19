@@ -1,4 +1,4 @@
-const CACHE_NAME='forca-em-casa-v1.6.0-beta';
+const CACHE_NAME='forca-em-casa-v1.7.0-beta';
 const ASSETS=['./','./index.html','./styles.css','./app.js','./plan.js','./completion-import.js','./exercise-media.js','./activities.js','./equipment-audit.js','./exercise-videos.js','./measurements.js','./assessment-photos.js','./google-drive-sync.js','./google-drive-controller.js','./google-config.js','./registration.js','./gate.js','./progress.js','./manifest.webmanifest','./assets/icon.svg','./assets/icon-192.png','./assets/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE_NAME).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
