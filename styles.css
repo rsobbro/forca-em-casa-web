@@ -79,3 +79,15 @@
 .body-record-fat{margin:10px 0 2px!important;color:#c8f86c!important;font-size:12px!important;font-weight:650}
 @media(max-width:950px){.body-fat-live-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:550px){.body-fat-live{padding:15px}.body-fat-live-grid>div{padding:11px}.body-fat-live-grid strong{font-size:22px}}
+
+/* V1.5 (beta): controles de acesso Google Drive pessoal */
+.cloud-settings{grid-column:1/-1;border:1px solid #48745a;background:linear-gradient(130deg,#172b25,#17252c)}
+.cloud-settings>p{line-height:1.75;margin:12px 0;color:var(--muted)}
+.cloud-settings strong{color:#d9f4cb}
+.cloud-settings .cloud-identity{background:#13221d;border-radius:12px;border:1px solid #466858;padding:13px 15px;margin:14px 0}
+.cloud-settings .cloud-identity strong{display:block;font-size:13px}
+.cloud-settings .cloud-identity small{display:block;margin-top:6px;color:#a2c0b5}
+.cloud-settings .cloud-error{padding:10px 13px;background:#3a2323;border:1px solid #b36363;border-radius:9px;color:#ffbfbf}
+.cloud-settings a{color:var(--lime)}
+.cloud-settings button:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:640px){.cloud-settings .setting-actions{display:flex;flex-direction:column}.cloud-settings button{width:100%}}
