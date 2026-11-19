@@ -1,20 +1,58 @@
-import {authorizeDrive,createGoogleDriveClient,detectDataConflicts,normalizeCloudData,normalizeDeleted,DELETE_CATEGORIES,drivePhotoName} from './google-drive-sync.js';
-import {mergeHistory} from './progress.js';
+import {authorizeDrive,createGoogleDriveClient,normalizeCloudData,normalizeDeleted,DELETE_CATEGORIES,drivePhotoName} from './google-drive-sync.js';
 import {PHOTO_VIEWS,getAssessmentPhotos,saveAssessmentPhotos} from './assessment-photos.js';
 
 export const DRIVE_OWNER_KEY='forca-em-casa-drive-owner-v1';
-export function mergeDriveHistories(local,remote){
+export const BASELINE_PREFIX='forca-em-casa-drive-baseline-';
+const stable=value=>{
+ if(Array.isArray(value))return '['+value.map(stable).join(',')+']';
+ if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+stable(value[k])).join(',')+'}';
+ return JSON.stringify(value);
+};
+const same=(a,b)=>stable(a)===stable(b);
+/**
+ * Three-way merge: local, cloud and last successfully synced baseline.
+ * Existing IDs can be updated when only one side diverges from baseline.
+ * If both changed differently, stop rather than silently discard work.
+ */
+export function mergeDriveHistories(local,remote,baseline=null){
  const localDeletes=normalizeDeleted(local?.deleted),remoteDeletes=normalizeDeleted(remote?.deleted);
  const deleted={};
  for(const kind of DELETE_CATEGORIES)deleted[kind]=[...new Set([...localDeletes[kind],...remoteDeletes[kind]])];
- const filter=(db)=>Object.fromEntries(DELETE_CATEGORIES.map(kind=>[kind,(db?.[kind]||[]).filter(x=>!deleted[kind].includes(x.id))]));
- const a={...local,...filter(local)},b=remote?{...remote,...filter(remote)}:null;
- const conflicts=b?detectDataConflicts(a,b):[];
- if(conflicts.length)return {db:null,deleted,conflicts};
- const merged=b?mergeHistory(a,b).db:a;
- return {db:{...merged,deleted},deleted,conflicts:[]};
+ const conflicts=[],records={};
+ for(const kind of DELETE_CATEGORIES){
+  const localMap=new Map((local?.[kind]||[]).map(x=>[x.id,x]));
+  const remoteMap=new Map((remote?.[kind]||[]).map(x=>[x.id,x]));
+  const baseMap=new Map((baseline?.[kind]||[]).map(x=>[x.id,x]));
+  const result=[];
+  const removals=new Set(deleted[kind]);
+  for(const id of new Set([...localMap.keys(),...remoteMap.keys()])){
+   if(removals.has(id))continue;
+   const a=localMap.get(id),b=remoteMap.get(id),old=baseMap.get(id);
+   if(a===undefined){result.push(b);continue}
+   if(b===undefined){result.push(a);continue}
+   if(same(a,b)){result.push(a);continue}
+   if(old!==undefined&&same(b,old)){result.push(a);continue}
+   if(old!==undefined&&same(a,old)){result.push(b);continue}
+   conflicts.push({section:kind,id});
+  }
+  records[kind]=result;
+ }
+ let active=local?.active||null;
+ if(remote?.active&&active&&!same(active,remote.active)){
+  if(baseline&&same(remote.active,baseline.active))active=local.active;
+  else if(baseline&&same(local.active,baseline.active))active=remote.active;
+  else conflicts.push({section:'active',id:'current'});
+ }else if(!active&&remote?.active){
+  if(!baseline||same(baseline.active,remote.active))active=baseline?null:remote.active;
+  else active=remote.active;
+ }
+ // Prefer detailed workouts over a manual checkmark for the same day.
+ const detailed=new Set(records.sessions.filter(x=>x.manual!==true).map(x=>x.date+':'+x.dayId));
+ records.sessions=records.sessions.filter(x=>x.manual!==true||!detailed.has(x.date+':'+x.dayId));
+ records.sessions.sort((a,b)=>b.date.localeCompare(a.date));
+ const startDates=[local?.profile?.startDate,remote?.profile?.startDate].filter(x=>typeof x==='string').sort();
+ return {db:{version:1,profile:{startDate:startDates[0]||'2026-11-16'},...records,active,deleted},deleted,conflicts};
 }
-
 export function hasRecords(db){
  return !!(db?.sessions?.length||db?.activities?.length||db?.measurements?.length||db?.active);
 }
@@ -53,7 +91,10 @@ export class GoogleDriveController {
    if(owner&&owner!==this.user.permissionId)throw new Error('Conta Google diferente da conta vinculada.');
    const remote=await this.client.readHistory(this.folders.data);
    const data=remote?normalizeCloudData(remote):null;
-   const resolved=mergeDriveHistories(db,data);
+   const baselineRaw=this.storage?.getItem(BASELINE_PREFIX+this.user.permissionId);
+   let baseline=null;
+   try{baseline=baselineRaw?normalizeCloudData(JSON.parse(baselineRaw)):null}catch{}
+   const resolved=mergeDriveHistories(db,data,baseline);
    if(resolved.conflicts.length)throw new Error('Conflito entre dispositivos em '+resolved.conflicts.length+' registro(s). Faça backup local e resolva as diferenças antes de sobrescrever o Google Drive.');
    const localHas=hasRecords(db);
    if(!owner&&localHas&& !this.confirmFn('Vincular os dados deste navegador à conta '+this.user.emailAddress+'? Confirme apenas se todos os registros locais pertencem a esta pessoa.')){
@@ -65,6 +106,7 @@ export class GoogleDriveController {
    const photosResult=await this.syncPhotos(merged,resolved.deleted);
    // Do not make a cloud-history success claim until this write succeeds.
    await this.client.writeHistory(this.folders.data,merged);
+   this.storage?.setItem(BASELINE_PREFIX+this.user.permissionId,JSON.stringify(merged));
    this.lastSync=new Date().toISOString();
    return {db:merged,lastSync:this.lastSync,photos:photosResult};
   }finally{this.busy=false}
