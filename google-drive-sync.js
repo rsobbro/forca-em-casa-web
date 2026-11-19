@@ -127,19 +127,61 @@ export function authorizeDrive(clientId,googleApi=globalThis.google){
   }catch{fail('Não foi possível abrir a autorização do Google.')}
  });
 }
+/**
+ * Diagnóstico seguro: não exibe corpo bruto da API, tokens, IDs de arquivo,
+ * nomes privados ou outras informações de requisição.
+ */
+export function driveOperation(url,method='GET'){
+ const path=String(url);
+ if(path.includes('/drive/v3/about'))return 'identificação da conta Google Drive';
+ if(path.includes('/oauth2/v3/userinfo'))return 'verificação da conta Google';
+ if(path.includes('/upload/drive/v3/files/'))return 'envio de conteúdo ao Drive';
+ if(path.includes('/drive/v3/files/')){
+  if(method==='DELETE')return 'exclusão de arquivo no Drive';
+  if(method==='PATCH')return 'atualização do arquivo no Drive';
+  return 'leitura de arquivo no Drive';
+ }
+ if(path.includes('/drive/v3/files')){
+  if(method==='POST')return 'criação de pasta ou arquivo no Drive';
+  return 'busca de pastas e arquivos no Drive';
+ }
+ return 'acesso ao Google Drive';
+}
+export function describeDriveFailure(status,reason='',providerMessage='',operation='acesso ao Google Drive'){
+ const code=String(reason||'').replace(/[^a-zA-Z0-9._-]/g,'').slice(0,80);
+ const phrase=String(providerMessage||'').toLowerCase().slice(0,500);
+ const stage=String(operation||'Google Drive').slice(0,90);
+ const suffix=' (HTTP '+status+(code?'; '+code:'')+').';
+ let guidance='O Google Drive recusou a operação. Verifique a autorização e tente novamente.';
+ if(status===401)guidance='A autorização expirou. Saia da conta e faça login novamente; depois autorize o Drive.';
+ else if(/accessnotconfigured|service_disabled|api_not_enabled/i.test(code)||/api has not been used|api is disabled|api is not enabled|has not been enabled|service disabled/.test(phrase))
+  guidance='A Google Drive API não está ativada no projeto Google Cloud do aplicativo. Ative a API na biblioteca do projeto.';
+ else if(/insufficientpermissions|insufficientauthenticationscopes|access_denied|insufficientfilepermissions|forbidden/i.test(code)||/insufficient authentication scopes/.test(phrase))
+  guidance='A conta não concedeu permissão suficiente para essa operação. Revise o consentimento do Drive e reconecte.';
+ else if(/storagequotaexceeded|storage_limit|storagequotafull/i.test(code))guidance='O Google Drive desta conta está sem espaço livre.';
+ else if(/rateLimitExceeded|userRateLimitExceeded|quotaExceeded|dailyLimitExceeded|resource_exhausted/i.test(code)||status===429)
+  guidance='O limite de requisições do Google Drive foi atingido. Aguarde antes de tentar novamente.';
+ else if(status===400)guidance='O Google Drive rejeitou os parâmetros da operação. O aplicativo precisa revisar a solicitação.';
+ else if(status===404)guidance='Um arquivo ou pasta criado pelo aplicativo não foi encontrado no Drive. Verifique se foi excluído ou movido.';
+ else if(status>=500)guidance='O Google Drive apresentou uma indisponibilidade temporária. Tente novamente depois.';
+ return 'Falha em '+stage+': '+guidance+suffix;
+}
 export function createGoogleDriveClient(accessToken,{fetchImpl=globalThis.fetch}={}){
  if(typeof accessToken!=='string'||!accessToken)throw new Error('Token OAuth não informado.');
  if(typeof fetchImpl!=='function')throw new Error('A API fetch não está disponível neste navegador.');
  async function request(url,options={}){
   const headers={Authorization:'Bearer '+accessToken,...options.headers};
+  const operation=driveOperation(url,options.method||'GET');
   let response;
   try{response=await fetchImpl(url,{...options,headers,cache:'no-store'});}
-  catch{throw new Error('Falha de rede. Os dados locais foram preservados.')}
+  catch{throw new Error('Falha de rede em '+operation+'. Verifique sua conexão; os dados locais foram preservados.')}
   if(!response.ok){
-   if(response.status===401)throw new Error('Autorização Google expirada. Reconecte sua conta para sincronizar.');
-   if(response.status===403)throw new Error('Acesso ao Drive negado ou limite da API atingido.');
-   if(response.status===404)throw new Error('Um arquivo ou pasta do Drive não foi encontrado.');
-   throw new Error('Erro do Google Drive (HTTP '+response.status+').');
+   let body=null;
+   try{body=await response.json()}catch{}
+   const reason=body?.error?.errors?.[0]?.reason||
+    body?.error?.details?.find?.(x=>typeof x?.reason==='string')?.reason||
+    body?.error?.status||'';
+   throw new Error(describeDriveFailure(response.status,reason,body?.error?.message,operation));
   }
   return response;
  }
