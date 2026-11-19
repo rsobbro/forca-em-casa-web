@@ -42,6 +42,18 @@ export function detectDataConflicts(local,remote){
  }
  return issues;
 }
+export const DELETE_CATEGORIES=['sessions','activities','measurements'];
+export function normalizeDeleted(deleted){
+ const out={sessions:[],activities:[],measurements:[]};
+ for(const kind of DELETE_CATEGORIES){
+  const items=deleted?.[kind]||[];
+  if(!Array.isArray(items)||items.length>5000||items.some(id=>typeof id!=='string'||!id||id.length>128)){
+   throw new Error('Histórico contém exclusões inválidas.');
+  }
+  out[kind]=[...new Set(items)];
+ }
+ return out;
+}
 export function normalizeCloudData(data){
  if(!data||data.version!==1||!data.profile||typeof data.profile.startDate!=='string'
  ||!Array.isArray(data.sessions)||!Array.isArray(data.activities)||!Array.isArray(data.measurements))
@@ -49,7 +61,8 @@ export function normalizeCloudData(data){
  if(data.sessions.length>5000||data.activities.length>10000||data.measurements.length>2000)
  throw new Error('O histórico excede os limites de segurança.');
  return {version:1,profile:{startDate:data.profile.startDate},
-  sessions:data.sessions,activities:data.activities,measurements:data.measurements,active:data.active||null};
+  sessions:data.sessions,activities:data.activities,measurements:data.measurements,active:data.active||null,
+  deleted:normalizeDeleted(data.deleted)};
 }
 export function authorizeDrive(clientId,googleApi=globalThis.google){
  if(!googleClientIdConfigured(clientId))return Promise.reject(new Error('Google OAuth Client ID ainda não foi configurado.'));
@@ -192,5 +205,9 @@ export function createGoogleDriveClient(accessToken,{fetchImpl=globalThis.fetch}
   const id=await upsert(folderId,name,blob,blob.type,{appProperties:{assessmentId,view,sha256:hash}});
   return {id,skipped:false,conflict:false};
  }
- return {about,list,folders,readHistory,writeHistory,listPhotos,downloadPhoto,writePhoto};
+ async function deleteFile(id){
+  if(!id)throw new Error('ID de arquivo inválido.');
+  await request(API+'/files/'+encodeURIComponent(id),{method:'DELETE'});
+ }
+ return {about,list,folders,readHistory,writeHistory,listPhotos,downloadPhoto,writePhoto,deleteFile};
 }
