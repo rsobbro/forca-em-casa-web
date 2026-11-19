@@ -49,6 +49,7 @@ export function validBodyMeasurement(x){
   if(typeof value!=='number'||!Number.isFinite(value)||value<field.min||value>field.max)return false;
   if(field.key!=='heightCm')count++;
  }
+ if(typeof x.chestCm==='number'&&typeof x.chestExpandedCm==='number'&&x.chestExpandedCm<x.chestCm)return false;
  return count>0;
 }
 export function seriesFor(measurements,key){
