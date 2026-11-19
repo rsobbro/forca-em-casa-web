@@ -117,6 +117,7 @@ export function authorizeDrive(clientId,googleApi=globalThis.google){
     client_id:clientId,scope:GOOGLE_AUTH_SCOPES,
     callback:response=>{
      if(response?.error||!response?.access_token){fail('A autorização Google foi recusada ou expirou.');return}
+     if(!String(response.scope||'').split(/\\s+/).includes(GOOGLE_DRIVE_SCOPE)){fail('A permissão para criar arquivos no Google Drive não foi concedida.');return}
      succeed(response.access_token);
     },
     error_callback:()=>fail('A janela de autorização foi fechada ou bloqueada.')
