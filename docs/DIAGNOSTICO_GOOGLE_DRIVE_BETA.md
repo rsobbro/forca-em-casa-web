@@ -52,3 +52,14 @@
   diferente de `Window`, além de validar o fluxo de sincronização inicial.
 - A versão de homologação /beta/ incorpora esta alteração; não limpar storage
   local antes de confirmar que o histórico foi realmente enviado ao Drive.
+
+## Publicação de homologação V1.7.1
+
+- Atualizada a versão beta para `1.7.1`, com nova identificação no cache do
+  service worker para que navegadores carreguem as correções.
+- Correção de `Illegal invocation` na confirmação de primeira sincronização e
+  acesso ao fetch nativo.
+- Interface reabilita botão `Sincronizar agora` após completar ou falhar.
+- Validar no mesmo navegador: atualizar a aba, acessar Configurações e selecionar
+  `Sincronizar agora`; nenhuma limpeza de armazenamento local é necessária.
+- Não considerar sincronizado enquanto o Google Drive não confirmar o envio.
