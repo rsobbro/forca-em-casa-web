@@ -1,5 +1,6 @@
 import {PROGRAM,prescribedSets,findDay} from './plan.js';
 import {GOOGLE_OAUTH_CLIENT_ID} from './google-config.js';
+import {getAge} from './registration.js';
 import {googleClientIdConfigured,normalizeDeleted} from './google-drive-sync.js';
 import {GoogleDriveController} from './google-drive-controller.js';
 import {weeklyProgress,totalProgress,mergeHistory} from './progress.js';
@@ -11,7 +12,8 @@ import {getExerciseMedia,PHOTO_SOURCE} from './exercise-media.js';
 import {ACTIVITY_TYPES,ACTIVITY_INTENSITIES,activityType,validActivity,validISO,activitySummary} from './activities.js';
 import {parseCompletionHash,mergeCompletedSessions,getMissingScheduledSessions} from './completion-import.js';
 
-const STORAGE_KEY='forca-em-casa-v1';
+const AUTH_CONTEXT=globalThis.__FORCA_AUTH_CONTEXT||null;
+const STORAGE_KEY=AUTH_CONTEXT?.cacheKey||'forca-em-casa-v1';
 const $=sel=>document.querySelector(sel);
 const app=$('#app-content');
 const icons={
@@ -52,11 +54,11 @@ const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 const initialData=()=>({version:1,profile:{startDate:todayISO()},sessions:[],activities:[],measurements:[],active:null,deleted:{sessions:[],activities:[],measurements:[]}});
 function loadDB(){try{const d=JSON.parse(localStorage.getItem(STORAGE_KEY));if(d&&d.version===1&&Array.isArray(d.sessions)&&d.profile&&typeof d.profile.startDate==='string'){return {version:1,profile:{startDate:d.profile.startDate},sessions:d.sessions,activities:Array.isArray(d.activities)?d.activities.filter(validActivity):[],measurements:Array.isArray(d.measurements)?d.measurements.filter(validBodyMeasurement):[],active:d.active||null,deleted:normalizeDeleted(d.deleted)}}}catch{}return initialData()}
 let db=loadDB();
-let cloudState='desconectado';
+let cloudState=AUTH_CONTEXT?.controller?.connected?'sincronizado':'desconectado';
 let cloudError='';
 let cloudTimer=null;
 let cloudBusy=false;
-const cloud=new GoogleDriveController({clientId:GOOGLE_OAUTH_CLIENT_ID});
+const cloud=AUTH_CONTEXT?.controller||new GoogleDriveController({clientId:GOOGLE_OAUTH_CLIENT_ID});
 function scheduleCloudSync(){
  if(!cloud.connected||cloudBusy)return;
  if(cloudTimer)clearTimeout(cloudTimer);
@@ -101,7 +103,12 @@ async function connectCloud(){
 }
 function disconnectCloud(){
  if(cloudTimer)clearTimeout(cloudTimer);
- cloudTimer=null;cloud.disconnect();cloudState='desconectado';cloudError='';
+ cloudTimer=null;
+ if(AUTH_CONTEXT&&globalThis.__FORCA_AUTH_LOGOUT){
+  if(confirm('Sair da conta Google? Os dados salvos em seu Drive permanecem disponíveis no próximo login.'))globalThis.__FORCA_AUTH_LOGOUT();
+  return;
+ }
+ cloud.disconnect();cloudState='desconectado';cloudError='';
  toast('Google Drive desconectado. Dados locais preservados.');
  if(getRoute()==='configuracoes')render();
 }
@@ -447,15 +454,18 @@ function cloudSettingsPanel(){
  const connected=cloud.connected;
  const account=connected?cloud.user?.emailAddress:'';
  const folders=connected?cloud.folders:null;
+ const person=AUTH_CONTEXT?.profile;
+ const years=person?.birthDate?getAge(person.birthDate):null;
  return `<section class="setting-card cloud-settings" aria-label="Sincronização Google Drive">
   <div class="active-label">05 · CONTA E NUVEM</div>
-  <h3 style="margin-top:12px">Google Drive pessoal</h3>
+  <h3 style="margin-top:12px">Conta pessoal e Google Drive</h3>
+  ${person?`<div class="cloud-identity"><strong>${escapeHTML(person.name)}</strong><small>Gmail: ${escapeHTML(person.email)} · Idade: ${years??'—'} · Sexo: ${person.sex==='masculino'?'Masculino':person.sex==='feminino'?'Feminino':'Prefiro não informar'}</small></div>`:''}
   <p>Os dados e fotos serão armazenados na sua conta Google, dentro de <strong>Força em Casa / Dados</strong> e <strong>Força em Casa / Fotos</strong>. Cada usuário autoriza somente os arquivos deste aplicativo.</p>
   ${enabled?
    `<div class="cloud-identity"><strong>${connected?'Conectado: '+escapeHTML(account):'Conta Google não conectada'}</strong><small>Estado: ${escapeHTML(cloudState)}${cloud.lastSync?' · Última sincronização: '+new Date(cloud.lastSync).toLocaleString('pt-BR'):''}</small></div>
    <div class="setting-actions">
-    <button class="button primary" data-action="drive-connect" ${cloudBusy?'disabled':''}>${ico('cloud',16)} ${connected?'Reconectar conta':'Entrar com Google'}</button>
-    ${connected?`<button class="button outline" data-action="drive-sync" ${cloudBusy?'disabled':''}>${ico('check',16)} Sincronizar agora</button><button class="button outline" data-action="drive-disconnect">Desconectar</button>`:''}
+    <button class="button primary" data-action="drive-connect" ${cloudBusy||connected?'disabled':''}>${ico('cloud',16)} ${connected?'Conta autenticada':'Entrar com Google'}</button>
+    ${connected?`<button class="button outline" data-action="drive-sync" ${cloudBusy?'disabled':''}>${ico('check',16)} Sincronizar agora</button><button class="button outline" data-action="drive-disconnect">Sair da conta</button>`:''}
    </div>
    ${folders?`<small>Pastas privadas criadas/identificadas no Drive desta conta.</small>`:''}
    `:
@@ -467,10 +477,10 @@ function cloudSettingsPanel(){
 }
 function configuracoes(){return `${header('PREFERÊNCIAS','Configurações','Personalize o início do ciclo e gerencie seus registros com segurança.')}
 <div class="grid2"><div class="setting-card"><div class="active-label">01 · PROGRAMA</div><h3 style="margin-top:12px">Data de início do ciclo</h3><p>A semana de readaptação é calculada a partir desta data. Alterá-la não apaga os treinos existentes.</p><div class="form-field"><label for="cycle-start">Início das 8 semanas</label><input id="cycle-start" type="date" value="${escapeHTML(db.profile.startDate)}" /></div><div class="setting-actions"><button class="button primary" data-action="save-settings">${ico('check')} Salvar data</button></div><p style="margin-top:14px">Semana atual: ${weekNum()>8?'ciclo inicial concluído':weekNum()+' de 8'}. Ficha: cinco treinos e dois dias de recuperação.</p></div>
-<div class="setting-card"><div class="active-label">02 · DADOS</div><h3 style="margin-top:12px">Backup e privacidade</h3><p>Seus treinos, atividades e avaliações corporais ficam no armazenamento local deste navegador. Não são enviados para o GitHub nem compartilhados entre dispositivos. Faça backups periódicos.</p><div class="setting-actions"><button class="button outline" data-action="export-json">${ico('download')} Exportar JSON</button><button class="button outline" data-action="import-json">${ico('upload')} Importar JSON</button></div><p style="margin-top:14px">Importar substitui seus registros atuais após confirmação.</p></div>
+<div class="setting-card"><div class="active-label">02 · DADOS</div><h3 style="margin-top:12px">Backup e privacidade</h3><p>Seus registros ficam no cache local desta conta e podem ser sincronizados com seu Google Drive autorizado. O GitHub publica somente o aplicativo, nunca seus dados. Faça também backups periódicos.</p><div class="setting-actions"><button class="button outline" data-action="export-json">${ico('download')} Exportar JSON</button><button class="button outline" data-action="import-json">${ico('upload')} Importar JSON</button></div><p style="margin-top:14px">Importar substitui seus registros atuais após confirmação.</p></div>
 <div class="setting-card"><div class="active-label">03 · SEGURANÇA</div><h3 style="margin-top:12px">Boas práticas de treino</h3><div class="safety">Ajuste os elásticos apenas em pontos de ancoragem seguros. Não improvise mecanismos na estação WCT. Procure avaliação profissional presencial para corrigir a técnica e adaptar o treino quando necessário.</div><div class="separator"></div><p>Este sistema registra desempenho, mas não realiza avaliação médica nem prescrição automática de novas cargas.</p></div>
 <div class="setting-card"><div class="active-label">04 · MANUTENÇÃO</div><h3 style="margin-top:12px">Restaurar dados locais</h3><p>Esta ação apaga o histórico de musculação, atividades e medidas corporais, a sessão em andamento e a data inicial do ciclo neste navegador. Um arquivo exportado pode ser importado depois.</p><div class="setting-actions"><button class="button danger" data-action="reset">${ico('trash')} Apagar todos os dados</button></div></div></div>
-${cloudSettingsPanel()}<div class="section tip-box"><div class="tip-heading">${ico('shield')} Arquitetura da V1</div><p>Aplicação web estática compatível com GitHub Pages. O acesso ao Google Drive é opcional e exige consentimento; os dados continuam locais quando não há conexão. Para sincronização contínua fora do navegador será necessário um backend seguro.</p></div>`}
+${cloudSettingsPanel()}<div class="section tip-box"><div class="tip-heading">${ico('shield')} Arquitetura da V1</div><p>Versão beta: login Google e cadastro pessoal obrigatórios. Os arquivos permanecem privados na conta Google autorizada; o cache local fica separado por usuário, mas não criptografado no dispositivo. Para autenticação e sessão com garantia de servidor, será necessário um backend seguro.</p></div>`}
 function render(){const route=getRoute();setActiveNav(route);const content={dashboard,treinos,atividades:activitiesPage,avaliacao:assessmentPage,evolucao,configuracoes,sessao:renderSession};app.innerHTML=content[route]();updateTimer();if(route==='avaliacao'){renderBodyPhotos().catch(()=>{});updateBodyFatPreview()}}
 function persistEdit(el){const s=db.active;if(!s)return;const arr=s.sets[el.dataset.exid];const index=Number(el.dataset.index);const set=arr?.[index];if(!set)return;if(el.dataset.edit==='reps'){if(el.value===''){set.reps=''}else{const n=Number(el.value);set.reps=Number.isFinite(n)?String(clamp(Math.round(n),0,999)):''}}else if(el.dataset.edit==='load'){set.load=String(el.value).slice(0,40)}else if(el.dataset.edit==='rpe'){set.rpe=String(el.value)}save()}
 function toggleSet(exid,index,button){
