@@ -507,7 +507,7 @@ function cloudSettingsPanel(){
   ${person?`<div class="cloud-identity"><strong>${escapeHTML(person.name)}</strong><small>Gmail: ${escapeHTML(person.email)} · Idade: ${years??'—'} · Sexo: ${person.sex==='masculino'?'Masculino':person.sex==='feminino'?'Feminino':'Prefiro não informar'}</small></div>`:''}
   <p>Seu Gmail confirma a identidade, mas <strong>não autoriza o Google Drive automaticamente</strong>. Ao salvar uma avaliação, você decide se permite criar e atualizar arquivos em <strong>Força em Casa / Dados</strong> e <strong>Força em Casa / Fotos</strong>.</p>
   ${enabled?
-   `<div class="cloud-identity"><strong>${connected?'Conectado: '+escapeHTML(account):'Conta Google não conectada'}</strong><small>Estado: ${escapeHTML(cloudState)}${cloud.lastSync?' · Última sincronização: '+new Date(cloud.lastSync).toLocaleString('pt-BR'):''}</small></div>
+   `<div class="cloud-identity"><strong>${connected?'Conectado: '+escapeHTML(account):'Gmail autenticado · Drive ainda não autorizado'}</strong><small>Estado: ${escapeHTML(cloudState)}${cloud.lastSync?' · Última sincronização: '+new Date(cloud.lastSync).toLocaleString('pt-BR'):''}</small></div>
    <div class="setting-actions">
     <button class="button primary" data-action="drive-connect" ${cloudBusy||connected?'disabled':''}>${ico('cloud',16)} ${connected?'Drive autorizado':'Autorizar Google Drive'}</button>
     ${connected?`<button class="button outline" data-action="drive-sync" ${cloudBusy?'disabled':''}>${ico('check',16)} Sincronizar agora</button><button class="button outline" data-action="drive-disconnect">Sair da conta</button>`:''}
