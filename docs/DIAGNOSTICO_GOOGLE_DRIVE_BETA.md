@@ -37,3 +37,18 @@
 - O cliente Drive agora identifica etapa da operação, status HTTP e `reason` sem reproduzir o corpo bruto da API.
 - A interface mantém o diagnóstico visível em Avaliação corporal / Configurações.
 - Sincronizações interrompidas não devem apagar dados nem ser anunciadas como confirmadas no Google Drive.
+
+## Correção — Illegal invocation (19/11/2026)
+
+- Causa identificada: `globalThis.confirm` era extraída do objeto `Window` e
+  chamada como `controller.confirmFn(...)` no primeiro vínculo com o Drive.
+  Métodos nativos de navegador podem lançar `Illegal invocation` quando o
+  receptor JavaScript não é o correto. Corrigido usando uma função adaptadora
+  `(mensagem) => globalThis.confirm(mensagem)`.
+- Proteção análoga para `fetch`, utilizando adaptador que preserva o objeto Window.
+- O botão `Sincronizar agora` é redesenhado somente depois de limpar o estado
+  `cloudBusy`; evita permanecer desabilitado após falha.
+- Testes de regressão simulam métodos de navegador que rejeitam um receptor
+  diferente de `Window`, além de validar o fluxo de sincronização inicial.
+- A versão de homologação /beta/ incorpora esta alteração; não limpar storage
+  local antes de confirmar que o histórico foi realmente enviado ao Drive.
