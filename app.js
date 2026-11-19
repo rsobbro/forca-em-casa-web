@@ -96,15 +96,18 @@ async function syncCloud(silent=false){
    cloudState='sincronizado';markCloudSaved();cloudError='';
    if(!silent)toast('Histórico e fotografias confirmados pelo Google Drive.');
   }
-  refreshCloudSyncView();
  }catch(err){
   cloudState='erro';
   cloudError=err instanceof Error?err.message:String(err);
   markCloudPending();
   // Uma falha não apaga o cache nem confirma gravação em nuvem.
-  refreshCloudSyncView();
   if(!silent)toast('Sincronização pendente. Consulte o diagnóstico na área de Avaliação ou Configurações.');
- }finally{cloudBusy=false}
+ }finally{
+  cloudBusy=false;
+  // Rerender after unlocking. Otherwise the "Sincronizar agora" button stays
+  // visually disabled because it was rendered while cloudBusy=true.
+  refreshCloudSyncView();
+ }
 }
 async function connectCloud(){
  if(!googleClientIdConfigured(GOOGLE_OAUTH_CLIENT_ID)){
