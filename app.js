@@ -1,4 +1,7 @@
 import {PROGRAM,prescribedSets,findDay} from './plan.js';
+import {GOOGLE_OAUTH_CLIENT_ID} from './google-config.js';
+import {googleClientIdConfigured} from './google-drive-sync.js';
+import {GoogleDriveController} from './google-drive-controller.js';
 import {weeklyProgress,totalProgress,mergeHistory} from './progress.js';
 import {EQUIPMENT,INVENTORY_NOTICE,validateProgramEquipment} from './equipment-audit.js';
 import {exerciseVideo} from './exercise-videos.js';
@@ -49,7 +52,60 @@ const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 const initialData=()=>({version:1,profile:{startDate:todayISO()},sessions:[],activities:[],measurements:[],active:null});
 function loadDB(){try{const d=JSON.parse(localStorage.getItem(STORAGE_KEY));if(d&&d.version===1&&Array.isArray(d.sessions)&&d.profile&&typeof d.profile.startDate==='string'){return {version:1,profile:{startDate:d.profile.startDate},sessions:d.sessions,activities:Array.isArray(d.activities)?d.activities.filter(validActivity):[],measurements:Array.isArray(d.measurements)?d.measurements.filter(validBodyMeasurement):[],active:d.active||null}}}catch{}return initialData()}
 let db=loadDB();
-function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(db))}catch{toast('Não foi possível salvar. Verifique o espaço ou o modo privado do navegador.')}}
+let cloudState='desconectado';
+let cloudError='';
+let cloudTimer=null;
+let cloudBusy=false;
+const cloud=new GoogleDriveController({clientId:GOOGLE_OAUTH_CLIENT_ID});
+function scheduleCloudSync(){
+ if(!cloud.connected||cloudBusy)return;
+ if(cloudTimer)clearTimeout(cloudTimer);
+ cloudTimer=setTimeout(()=>{cloudTimer=null;syncCloud(true)},18000);
+}
+async function syncCloud(silent=false){
+ if(!cloud.connected||cloudBusy)return;
+ cloudBusy=true;
+ if(cloudTimer){clearTimeout(cloudTimer);cloudTimer=null}
+ cloudState='sincronizando';
+ try{
+  const result=await cloud.sync(db);
+  db=result.db;
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(db));
+  cloudState='sincronizado';
+  cloudError=result.photos.conflicts?result.photos.conflicts+' foto(s) têm versões diferentes: nenhuma foi sobrescrita.':'';
+  if(!silent)toast('Dados e fotos sincronizados no seu Google Drive.');
+  if(getRoute()==='configuracoes'||getRoute()==='evolucao')render();
+ }catch(err){
+  cloudState='erro';cloudError=err.message;
+  // A falha jamais deve apagar os dados locais nem exibir "salvo na nuvem".
+  if(!silent)toast('Falha na sincronização: '+err.message);
+ }finally{cloudBusy=false}
+}
+async function connectCloud(){
+ if(!googleClientIdConfigured(GOOGLE_OAUTH_CLIENT_ID)){
+  toast('Falta configurar o Client ID OAuth do Google Cloud.');return;
+ }
+ if(cloudBusy)return;
+ cloudBusy=true;cloudState='conectando';cloudError='';
+ try{
+  const {user}=await cloud.connect();
+  cloudState='conectado';
+  toast('Conta '+user.emailAddress+' autorizada. Preparando sincronização.');
+ }catch(err){
+  cloudState='erro';cloudError=err.message;toast('Google Drive: '+err.message);
+  cloudBusy=false; if(getRoute()==='configuracoes')render();
+  return;
+ }
+ cloudBusy=false;
+ await syncCloud(false);
+}
+function disconnectCloud(){
+ if(cloudTimer)clearTimeout(cloudTimer);
+ cloudTimer=null;cloud.disconnect();cloudState='desconectado';cloudError='';
+ toast('Google Drive desconectado. Dados locais preservados.');
+ if(getRoute()==='configuracoes')render();
+}
+function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(db));scheduleCloudSync()}catch{toast('Não foi possível salvar. Verifique o espaço ou o modo privado do navegador.')}}
 let selectedDay='A';
 let expandedSession=null;
 let pendingImportMode='replace';
@@ -368,7 +424,7 @@ function saveAssessment(){
  if(db.measurements.some(x=>x.date===date)&&!confirm('Já existe avaliação nesta data. Deseja adicionar outra?'))return;
  db.measurements.push(record);save();go('avaliacao');
  if(Object.keys(photos).length){
-  saveAssessmentPhotos(id,photos).then(()=>{renderBodyPhotos();toast('Avaliação e fotos salvas neste navegador.')}).catch(err=>toast('Medidas salvas, mas fotos falharam: '+err.message));
+  saveAssessmentPhotos(id,photos).then(()=>{renderBodyPhotos();scheduleCloudSync();toast('Avaliação e fotos salvas neste navegador.')}).catch(err=>toast('Medidas salvas, mas fotos falharam: '+err.message));
  }else toast('Avaliação salva somente neste navegador.');
 }
 function saveEditedAssessmentPhotos(id){
@@ -377,7 +433,7 @@ function saveEditedAssessmentPhotos(id){
  if(!files)return;
  if(!Object.keys(files).length){toast('Selecione ao menos uma foto para salvar.');return}
  saveAssessmentPhotos(id,files).then(()=>{
-  photoEditId=null;render();toast('Fotos desta avaliação atualizadas.');
+  photoEditId=null;render();scheduleCloudSync();toast('Fotos desta avaliação atualizadas.');
  }).catch(err=>toast('Não foi possível salvar as fotos: '+err.message));
 }
 function exportAssessmentCSV(){
@@ -386,12 +442,35 @@ function exportAssessmentCSV(){
  download('\ufeff'+rows.map(row=>row.map(csvEsc).join(';')).join('\r\n'),`forca-em-casa-avaliacoes-${todayISO()}.csv`,'text/csv;charset=utf-8');
  toast('Avaliações exportadas em CSV.');
 }
+function cloudSettingsPanel(){
+ const enabled=googleClientIdConfigured(GOOGLE_OAUTH_CLIENT_ID);
+ const connected=cloud.connected;
+ const account=connected?cloud.user?.emailAddress:'';
+ const folders=connected?cloud.folders:null;
+ return `<section class="setting-card cloud-settings" aria-label="Sincronização Google Drive">
+  <div class="active-label">05 · CONTA E NUVEM</div>
+  <h3 style="margin-top:12px">Google Drive pessoal</h3>
+  <p>Os dados e fotos serão armazenados na sua conta Google, dentro de <strong>Força em Casa / Dados</strong> e <strong>Força em Casa / Fotos</strong>. Cada usuário autoriza somente os arquivos deste aplicativo.</p>
+  ${enabled?
+   `<div class="cloud-identity"><strong>${connected?'Conectado: '+escapeHTML(account):'Conta Google não conectada'}</strong><small>Estado: ${escapeHTML(cloudState)}${cloud.lastSync?' · Última sincronização: '+new Date(cloud.lastSync).toLocaleString('pt-BR'):''}</small></div>
+   <div class="setting-actions">
+    <button class="button primary" data-action="drive-connect" ${cloudBusy?'disabled':''}>${ico('cloud',16)} ${connected?'Reconectar conta':'Entrar com Google'}</button>
+    ${connected?`<button class="button outline" data-action="drive-sync" ${cloudBusy?'disabled':''}>${ico('check',16)} Sincronizar agora</button><button class="button outline" data-action="drive-disconnect">Desconectar</button>`:''}
+   </div>
+   ${folders?`<small>Pastas privadas criadas/identificadas no Drive desta conta.</small>`:''}
+   `:
+   `<p><strong>Integração preparada, aguardando OAuth Client ID.</strong> O administrador deve ativar a Drive API e configurar o Client ID público em <code>google-config.js</code>. Até lá, seus registros continuam apenas neste navegador.</p>
+   <a href="https://github.com/rsobbro/forca-em-casa-web/blob/feature/google-drive-sync/docs/GOOGLE_DRIVE.md" target="_blank" rel="noopener noreferrer">Manual de ativação Google Cloud</a>`}
+  ${cloudError?`<p class="cloud-error" role="alert">${escapeHTML(cloudError)}</p>`:''}
+  <p class="disclaimer">Segurança: OAuth temporário, sem guardar senhas ou tokens. Uma conta Google diferente neste navegador é bloqueada para evitar vazamento de históricos. Sincronização automática ocorre somente enquanto a conta está conectada e com internet. Alterações conflitantes não são sobrescritas automaticamente.</p>
+ </section>`;
+}
 function configuracoes(){return `${header('PREFERÊNCIAS','Configurações','Personalize o início do ciclo e gerencie seus registros com segurança.')}
 <div class="grid2"><div class="setting-card"><div class="active-label">01 · PROGRAMA</div><h3 style="margin-top:12px">Data de início do ciclo</h3><p>A semana de readaptação é calculada a partir desta data. Alterá-la não apaga os treinos existentes.</p><div class="form-field"><label for="cycle-start">Início das 8 semanas</label><input id="cycle-start" type="date" value="${escapeHTML(db.profile.startDate)}" /></div><div class="setting-actions"><button class="button primary" data-action="save-settings">${ico('check')} Salvar data</button></div><p style="margin-top:14px">Semana atual: ${weekNum()>8?'ciclo inicial concluído':weekNum()+' de 8'}. Ficha: cinco treinos e dois dias de recuperação.</p></div>
 <div class="setting-card"><div class="active-label">02 · DADOS</div><h3 style="margin-top:12px">Backup e privacidade</h3><p>Seus treinos, atividades e avaliações corporais ficam no armazenamento local deste navegador. Não são enviados para o GitHub nem compartilhados entre dispositivos. Faça backups periódicos.</p><div class="setting-actions"><button class="button outline" data-action="export-json">${ico('download')} Exportar JSON</button><button class="button outline" data-action="import-json">${ico('upload')} Importar JSON</button></div><p style="margin-top:14px">Importar substitui seus registros atuais após confirmação.</p></div>
 <div class="setting-card"><div class="active-label">03 · SEGURANÇA</div><h3 style="margin-top:12px">Boas práticas de treino</h3><div class="safety">Ajuste os elásticos apenas em pontos de ancoragem seguros. Não improvise mecanismos na estação WCT. Procure avaliação profissional presencial para corrigir a técnica e adaptar o treino quando necessário.</div><div class="separator"></div><p>Este sistema registra desempenho, mas não realiza avaliação médica nem prescrição automática de novas cargas.</p></div>
 <div class="setting-card"><div class="active-label">04 · MANUTENÇÃO</div><h3 style="margin-top:12px">Restaurar dados locais</h3><p>Esta ação apaga o histórico de musculação, atividades e medidas corporais, a sessão em andamento e a data inicial do ciclo neste navegador. Um arquivo exportado pode ser importado depois.</p><div class="setting-actions"><button class="button danger" data-action="reset">${ico('trash')} Apagar todos os dados</button></div></div></div>
-<div class="section tip-box"><div class="tip-heading">${ico('shield')} Arquitetura da V1</div><p>Aplicação web estática, sem contas e sem servidor de dados. Compatível com hospedagem por GitHub Pages. Para sincronizar entre dispositivos em uma futura versão, será necessário implantar autenticação e armazenamento seguro, com controles de acesso e privacidade.</p></div>`}
+${cloudSettingsPanel()}<div class="section tip-box"><div class="tip-heading">${ico('shield')} Arquitetura da V1</div><p>Aplicação web estática compatível com GitHub Pages. O acesso ao Google Drive é opcional e exige consentimento; os dados continuam locais quando não há conexão. Para sincronização contínua fora do navegador será necessário um backend seguro.</p></div>`}
 function render(){const route=getRoute();setActiveNav(route);const content={dashboard,treinos,atividades:activitiesPage,avaliacao:assessmentPage,evolucao,configuracoes,sessao:renderSession};app.innerHTML=content[route]();updateTimer();if(route==='avaliacao'){renderBodyPhotos().catch(()=>{});updateBodyFatPreview()}}
 function persistEdit(el){const s=db.active;if(!s)return;const arr=s.sets[el.dataset.exid];const index=Number(el.dataset.index);const set=arr?.[index];if(!set)return;if(el.dataset.edit==='reps'){if(el.value===''){set.reps=''}else{const n=Number(el.value);set.reps=Number.isFinite(n)?String(clamp(Math.round(n),0,999)):''}}else if(el.dataset.edit==='load'){set.load=String(el.value).slice(0,40)}else if(el.dataset.edit==='rpe'){set.rpe=String(el.value)}save()}
 function toggleSet(exid,index,button){
@@ -481,7 +560,7 @@ try{
  toast('Backup importado. '+recovered+' foto(s) restaurada(s).');
 }catch(err){toast('Dados importados; fotos não puderam ser importadas: '+err.message)}
 }
-function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;render();return}
+function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;render();return}
 if(a==='cancel-photo-editor'){photoEditId=null;render();return}
 if(a==='save-assessment-photos'){saveEditedAssessmentPhotos(btn.dataset.id);return}
 if(a==='delete-assessment'){if(confirm('Excluir esta avaliação corporal e suas fotos neste navegador?')){
