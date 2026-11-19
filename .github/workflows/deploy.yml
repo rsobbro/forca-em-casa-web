@@ -52,7 +52,8 @@ jobs:
           git archive FETCH_HEAD | tar -x -C "$beta_dir"
           mkdir -p _site/beta/assets
           for file in index.html styles.css app.js plan.js completion-import.js exercise-media.js activities.js equipment-audit.js exercise-videos.js measurements.js progress.js assessment-photos.js google-drive-sync.js google-drive-controller.js google-config.js registration.js gate.js sw.js manifest.webmanifest .nojekyll; do
-            test -s "$beta_dir/$file"
+            # .nojekyll é intencionalmente vazio; testar existência, não tamanho.
+            test -f "$beta_dir/$file"
             cp "$beta_dir/$file" "_site/beta/$file"
           done
           cp "$beta_dir"/assets/* _site/beta/assets/
