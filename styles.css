@@ -122,3 +122,12 @@ body.auth-locked #app-content{max-width:100%;width:100%;padding:0!important;marg
 .auth-back{display:block;margin:8px auto 0}
 .auth-splash{text-align:center;padding:15vh 18px;color:#b8cebc}
 @media(max-width:600px){.auth-layout{align-items:flex-start;padding-top:16px}.auth-card{border-radius:16px}.auth-brand h1{font-size:20px}}
+
+/* Cadastro primeiro, permissão de Drive no primeiro salvamento — beta. */
+.cloud-assessment-banner{border:1px solid #a4c95c;background:linear-gradient(135deg,#263825,#16292b);margin:16px 0 24px;padding:22px;border-radius:16px}
+.cloud-assessment-banner .section-title{color:#dcf6bc}.cloud-assessment-banner p{line-height:1.7;font-size:12px;color:#d4e2d3;margin:12px 0}
+.cloud-assessment-banner strong{color:#e5f8c6}.cloud-assessment-banner .setting-actions{display:flex;gap:11px;flex-wrap:wrap;margin-top:16px}
+.cloud-assessment-banner .button{min-height:44px}.cloud-assessment-banner code{font-size:11px}
+.auth-recover{border-top:1px solid #3b544b;margin-top:24px;padding-top:15px}.auth-recover p{font-size:12px;color:#cedccc}
+.auth-recover small{display:block;font-size:11px;color:#9ab2a7;line-height:1.6;margin-top:9px}
+@media(max-width:640px){.cloud-assessment-banner .setting-actions{flex-direction:column}.cloud-assessment-banner .button{width:100%}.auth-recover .button{width:100%}}
