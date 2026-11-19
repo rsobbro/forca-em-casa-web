@@ -15,13 +15,16 @@ test('conectar não envia nada antes de consentimento, e bloqueia outra conta no
  };
  const store=storage({[DRIVE_OWNER_KEY]:'original-owner'});
  const controller=new GoogleDriveController({clientId:CLIENT_ID,storage:store,fetchImpl,googleApi:identity});
+ await controller.authenticate();
+ assert.equal(calls,1); // login não solicita Drive
  await assert.rejects(controller.connect(),/outra conta Google/);
- assert.equal(calls,2); // about.get e userinfo; nenhuma pasta criada após divergência
+ assert.equal(calls,3);
  assert.equal(controller.connected,false);
 });
 test('não declara conexão ativa sem OAuth Client ID válido',async()=>{
  const controller=new GoogleDriveController({clientId:'',storage:storage(),googleApi:identity});
- await assert.rejects(controller.connect(),/Client ID/);
+ await assert.rejects(controller.authenticate(),/Client ID/);
+ await assert.rejects(controller.connect(),/Primeiro faça login/);
  assert.equal(controller.connected,false);
 });
 
@@ -64,7 +67,7 @@ test('não permite domínio não-Gmail mesmo quando o token OAuth é válido',as
   throw new Error('Endpoint inesperado');
  };
  const ctrl=new GoogleDriveController({clientId:CLIENT_ID,storage:storage(),fetchImpl,googleApi:identity});
- await assert.rejects(ctrl.connect(),/Gmail/);
+ await assert.rejects(ctrl.authenticate(),/Somente Gmail verificado/);
  assert.equal(posts,0);
  assert.equal(ctrl.connected,false);
 });
