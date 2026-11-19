@@ -63,8 +63,14 @@ export function hasRecords(db){
  * Um dispositivo compartilhado exige um perfil/navegador separado por pessoa.
  */
 export class GoogleDriveController {
- constructor({clientId,fetchImpl=globalThis.fetch,storage=globalThis.localStorage,photos={getAssessmentPhotos,saveAssessmentPhotos},
-  confirmFn=globalThis.confirm,googleApi=globalThis.google}={}){
+ constructor({clientId,
+  // Browser native methods must retain their Window receiver. Passing
+  // window.confirm/window.fetch as a bare method can throw "Illegal invocation".
+  fetchImpl=(...args)=>globalThis.fetch(...args),
+  storage=globalThis.localStorage,
+  photos={getAssessmentPhotos,saveAssessmentPhotos},
+  confirmFn=(message)=>globalThis.confirm(message),
+  googleApi=globalThis.google}={}){
   this.clientId=clientId;this.fetchImpl=fetchImpl;this.storage=storage;this.photos=photos;
   this.confirmFn=confirmFn;this.googleApi=googleApi;this.client=null;this.user=null;this.folders=null;
   this.busy=false;this.lastSync=null;this.identity=null;
