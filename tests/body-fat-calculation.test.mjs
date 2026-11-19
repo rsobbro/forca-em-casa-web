@@ -26,3 +26,15 @@ test('não infere gordura de outras circunferências sem altura e cintura',()=>{
  assert.deepEqual(estimateBodyFatForAssessment(noWaist,[]),{rfm:null,navy:null,fatMassKg:null,leanMassKg:null,heightSource:'mesma avaliação'});
  assert.deepEqual(estimatedBodyFatSeries([noWaist]),[]);
 });
+
+test('estimativa feminina considera sexo e quadril, não aplica fórmula masculina indevidamente',async()=>{
+ const m={id:'female',date:'2026-11-18',heightCm:165,waistCm:75,hipsCm:98,neckCm:33,weightKg:65};
+ const {estimateNavyFemale}=await import('../measurements.js');
+ const estimated=estimateBodyFatForAssessment(m,[m],'female');
+ assert.equal(estimated.rfm,36.0);
+ assert.equal(estimated.navy,estimateNavyFemale(165,75,98,33));
+ assert.ok(estimated.navy>0&&estimated.navy<75);
+ const unknown=estimateBodyFatForAssessment(m,[m],null);
+ assert.equal(unknown.rfm,null);
+ assert.equal(unknown.navy,null);
+});

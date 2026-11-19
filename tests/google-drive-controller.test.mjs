@@ -54,3 +54,17 @@ test('preserva histórico do Drive em um celular vazio na primeira conexão',()=
  assert.equal(output.conflicts.length,0);
  assert.equal(output.db.sessions.length,1);
 });
+
+test('não permite domínio não-Gmail mesmo quando o token OAuth é válido',async()=>{
+ let posts=0;
+ const fetchImpl=async(url,options={})=>{
+  if(options.method==='POST')posts++;
+  if(url.includes('/about?'))return new Response(JSON.stringify({user:{permissionId:'owner',emailAddress:'teste@empresa.com'}}),{status:200});
+  if(url.includes('/userinfo'))return new Response(JSON.stringify({sub:'12345678901234567890',email:'teste@empresa.com',email_verified:true}),{status:200});
+  throw new Error('Endpoint inesperado');
+ };
+ const ctrl=new GoogleDriveController({clientId:CLIENT_ID,storage:storage(),fetchImpl,googleApi:identity});
+ await assert.rejects(ctrl.connect(),/Gmail/);
+ assert.equal(posts,0);
+ assert.equal(ctrl.connected,false);
+});

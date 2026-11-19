@@ -73,6 +73,11 @@ test('cria pastas e historico.json no Drive do usuário autorizado, lê novament
  await client.writeHistory(dirs.data,snapshot);
  assert.deepEqual(await client.readHistory(dirs.data),{...snapshot,deleted:{sessions:[],activities:[],measurements:[]}});
  assert.equal(mock.files.filter(x=>x.name==='historico.json').length,1);
+ const profile={version:1,googleSub:'12345678901234567890',googlePermissionId:'owner-1',email:'teste@gmail.com',name:'Nome Teste',birthDate:'1985-04-12',sex:'masculino',consentVersion:'1.0',createdAt:'2026-11-18T10:00:00.000Z',updatedAt:'2026-11-18T10:00:00.000Z'};
+ assert.equal(await client.readProfile(dirs.data),null);
+ await client.writeProfile(dirs.data,profile);
+ assert.deepEqual(await client.readProfile(dirs.data),profile);
+ assert.equal(mock.files.filter(x=>x.name==='perfil.json').length,1);
 });
 test('faz upload de foto privada separada de historico.json, sem sobrescrever sem consentimento',async()=>{
  const mock=mockDrive(),client=createGoogleDriveClient('token',{fetchImpl:mock.fetchImpl});
