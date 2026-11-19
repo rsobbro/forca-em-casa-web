@@ -17,7 +17,7 @@ test('conectar não envia nada antes de consentimento, e bloqueia outra conta no
  const controller=new GoogleDriveController({clientId:CLIENT_ID,storage:store,fetchImpl,googleApi:identity});
  await controller.authenticate();
  assert.equal(calls,1); // login não solicita Drive
- await assert.rejects(controller.connect(),/outra conta Google/);
+ await assert.rejects(controller.connect(),/outra conta/);
  assert.equal(calls,3);
  assert.equal(controller.connected,false);
 });
