@@ -31,7 +31,7 @@ test('estimativa feminina considera sexo e quadril, não aplica fórmula masculi
  const m={id:'female',date:'2026-11-18',heightCm:165,waistCm:75,hipsCm:98,neckCm:33,weightKg:65};
  const {estimateNavyFemale}=await import('../measurements.js');
  const estimated=estimateBodyFatForAssessment(m,[m],'female');
- assert.equal(estimated.rfm,36.0);
+ assert.equal(estimated.rfm,32.0);
  assert.equal(estimated.navy,estimateNavyFemale(165,75,98,33));
  assert.ok(estimated.navy>0&&estimated.navy<75);
  const unknown=estimateBodyFatForAssessment(m,[m],null);
