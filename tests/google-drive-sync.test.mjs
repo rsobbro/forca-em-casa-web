@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {GOOGLE_DRIVE_SCOPE,GOOGLE_AUTH_SCOPES,GOOGLE_LOGIN_SCOPES,googleClientIdConfigured,authorizeIdentity,authorizeDrive,createGoogleDriveClient,detectDataConflicts,drivePhotoName,escapeDriveQuery} from '../google-drive-sync.js';
+import {GOOGLE_DRIVE_SCOPE,GOOGLE_AUTH_SCOPES,GOOGLE_LOGIN_SCOPES,googleClientIdConfigured,authorizeIdentity,authorizeDrive,createGoogleDriveClient,detectDataConflicts,drivePhotoName,escapeDriveQuery,driveOperation,describeDriveFailure} from '../google-drive-sync.js';
 
 const CLIENT_ID='123456789012-this-is-an-oauth-app.apps.googleusercontent.com';
 function mockDrive(){
@@ -115,4 +115,31 @@ test('login básico solicita somente openid email profile e não cria pastas',as
  assert.equal(scope,GOOGLE_LOGIN_SCOPES);
  assert.equal(scope.includes('drive.file'),false);
  assert.equal(identity.user.email,'pessoa@gmail.com');
+});
+
+test('falha da API desativada identifica a etapa e mantém o motivo visível',async()=>{
+ const client=createGoogleDriveClient('test-token',{fetchImpl:async()=>new Response(JSON.stringify({
+  error:{code:403,status:'PERMISSION_DENIED',message:'Google Drive API has not been used in project 949578637962 before or it is disabled.',
+  details:[{'@type':'type.googleapis.com/google.rpc.ErrorInfo',reason:'SERVICE_DISABLED'}]}
+ }),{status:403,headers:{'Content-Type':'application/json'}})});
+ await assert.rejects(client.folders(),err=>{
+  assert.match(err.message,/busca de pastas e arquivos/);
+  assert.match(err.message,/API não está ativada/);
+  assert.match(err.message,/HTTP 403/);
+  assert.doesNotMatch(err.message,/test-token|949578637962/);
+  return true;
+ });
+});
+test('diferencia falta de escopo, quota de espaço e parâmetros inválidos',()=>{
+ assert.match(describeDriveFailure(403,'insufficientPermissions','','upload'),/permissão suficiente/);
+ assert.match(describeDriveFailure(403,'storageQuotaExceeded','','upload'),/sem espaço livre/);
+ assert.match(describeDriveFailure(429,'rateLimitExceeded','','upload'),/limite de requisições/);
+ assert.match(describeDriveFailure(400,'invalidArgument','','upload'),/parâmetros/);
+ assert.match(describeDriveFailure(401,'','','upload'),/expirou/);
+ assert.equal(driveOperation('https://www.googleapis.com/upload/drive/v3/files/123','PATCH'),'envio de conteúdo ao Drive');
+});
+test('mensagem de erro da API nunca ecoa dados privados nem credenciais',()=>{
+ const error=describeDriveFailure(403,'forbidden','Bearer ABCD_SENSITIVE_NAME ABCD_SENSITIVE_TOKEN','envio de conteúdo ao Drive');
+ assert.doesNotMatch(error,/ABCD_SENSITIVE/);
+ assert.match(error,/HTTP 403/);
 });
