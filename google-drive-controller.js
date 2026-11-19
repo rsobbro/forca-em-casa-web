@@ -1,5 +1,6 @@
 import {authorizeDrive,createGoogleDriveClient,normalizeCloudData,normalizeDeleted,DELETE_CATEGORIES,drivePhotoName} from './google-drive-sync.js';
 import {PHOTO_VIEWS,getAssessmentPhotos,saveAssessmentPhotos} from './assessment-photos.js';
+import {validGoogleIdentity,validRegistration} from './registration.js';
 
 export const DRIVE_OWNER_KEY='forca-em-casa-drive-owner-v1';
 export const BASELINE_PREFIX='forca-em-casa-drive-baseline-';
@@ -73,6 +74,7 @@ export class GoogleDriveController {
   const token=await authorizeDrive(this.clientId,this.googleApi);
   const client=createGoogleDriveClient(token,{fetchImpl:this.fetchImpl});
   const user=await client.about();
+  if(!validGoogleIdentity(user))throw new Error('O login exige uma conta Gmail válida, com e-mail confirmado pelo Google.');
   const existingOwner=this.storage?.getItem(DRIVE_OWNER_KEY);
   if(existingOwner&&existingOwner!==user.permissionId){
    throw new Error('Este navegador já está vinculado a outra conta Google. Use um perfil de navegador separado; não misturamos registros pessoais.');
@@ -81,6 +83,17 @@ export class GoogleDriveController {
   const folders=await client.folders();
   this.client=client;this.user=user;this.folders=folders;
   return {user,folders};
+ }
+ async loadProfile(){
+  if(!this.connected)throw new Error('Faça login com Google para consultar seu cadastro.');
+  const profile=await this.client.readProfile(this.folders.data);
+  if(profile&&!validRegistration(profile,this.user))throw new Error('O cadastro no Drive está incompleto ou não corresponde à conta Gmail autenticada.');
+  return profile;
+ }
+ async saveProfile(profile){
+  if(!this.connected||!validRegistration(profile,this.user))throw new Error('Cadastro ou login Google inválido.');
+  await this.client.writeProfile(this.folders.data,profile);
+  return profile;
  }
  async sync(db){
   if(!this.connected)throw new Error('Conecte sua conta Google antes de sincronizar.');
