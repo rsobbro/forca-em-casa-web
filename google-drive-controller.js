@@ -71,7 +71,7 @@ export class GoogleDriveController {
  }
  get connected(){return !!this.client&&!!this.user&&!!this.folders}
  async connect(){
-  const token=await authorizeDrive(this.clientId,this.googleApi);
+  const token=await authorizeDrive(this.clientId,this.googleApi||globalThis.google);
   const client=createGoogleDriveClient(token,{fetchImpl:this.fetchImpl});
   const user=await client.about();
   if(!validGoogleIdentity(user))throw new Error('O login exige uma conta Gmail válida, com e-mail confirmado pelo Google.');
