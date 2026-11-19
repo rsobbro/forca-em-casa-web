@@ -123,7 +123,7 @@ export function authorizeDrive(clientId,googleApi=globalThis.google){
     error_callback:()=>fail('A janela de autorização foi fechada ou bloqueada.')
    });
    // Always invoked from a user click; no token is persisted.
-   client.requestAccessToken({prompt:''});
+   client.requestAccessToken({prompt:'consent'});
   }catch{fail('Não foi possível abrir a autorização do Google.')}
  });
 }
