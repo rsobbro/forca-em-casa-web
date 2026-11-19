@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {GoogleDriveController,DRIVE_OWNER_KEY} from '../google-drive-controller.js';
+import {GoogleDriveController,DRIVE_OWNER_KEY,mergeDriveHistories} from '../google-drive-controller.js';
 const CLIENT_ID='123456789012-example.apps.googleusercontent.com';
 const identity={accounts:{oauth2:{initTokenClient(options){return {requestAccessToken(){options.callback({access_token:'my-token'})}}}}}};
 const storage=(entries={})=>{const m=new Map(Object.entries(entries));return {getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v),has:k=>m.has(k)}};
@@ -22,4 +22,34 @@ test('não declara conexão ativa sem OAuth Client ID válido',async()=>{
  const controller=new GoogleDriveController({clientId:'',storage:storage(),googleApi:identity});
  await assert.rejects(controller.connect(),/Client ID/);
  assert.equal(controller.connected,false);
+});
+
+test('a exclusão num dispositivo não ressuscita quando outro tem registro antigo',()=>{
+ const existing={...validEmpty,sessions:[{id:'one',date:'2026-11-16',dayId:'A',sets:{},manual:true}]};
+ const removed={...validEmpty,deleted:{sessions:['one'],activities:[],measurements:[]}};
+ const output=mergeDriveHistories(removed,existing,existing);
+ assert.equal(output.db.sessions.length,0);
+ assert.deepEqual(output.db.deleted.sessions,['one']);
+ assert.equal(output.conflicts.length,0);
+});
+test('uma edição local após o último sync é aceita quando o cloud não mudou',()=>{
+ const original={id:'one',date:'2026-11-16',dayId:'A',sets:{a1:[{done:true,reps:'10'}]}};
+ const updated={...original,sets:{a1:[{done:true,reps:'12'}]}};
+ const base={...validEmpty,sessions:[original]};
+ const local={...validEmpty,sessions:[updated]};
+ const output=mergeDriveHistories(local,base,base);
+ assert.equal(output.conflicts.length,0);
+ assert.equal(output.db.sessions[0].sets.a1[0].reps,'12');
+});
+test('não sobrescreve alterações simultâneas do mesmo registro',()=>{
+ const make=reps=>({...validEmpty,sessions:[{id:'one',date:'2026-11-16',dayId:'A',sets:{a1:[{done:true,reps}]}}]});
+ const output=mergeDriveHistories(make('11'),make('12'),make('10'));
+ assert.equal(output.conflicts.length,1);
+ assert.equal(output.conflicts[0].section,'sessions');
+});
+test('preserva histórico do Drive em um celular vazio na primeira conexão',()=>{
+ const cloud={...validEmpty,sessions:[{id:'one',date:'2026-11-16',dayId:'A',sets:{},manual:true}]};
+ const output=mergeDriveHistories(validEmpty,cloud);
+ assert.equal(output.conflicts.length,0);
+ assert.equal(output.db.sessions.length,1);
 });
