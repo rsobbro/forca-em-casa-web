@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {GoogleDriveController,DRIVE_OWNER_KEY,mergeDriveHistories} from '../google-drive-controller.js';
 const CLIENT_ID='123456789012-example.apps.googleusercontent.com';
-const identity={accounts:{oauth2:{initTokenClient(options){return {requestAccessToken(){options.callback({access_token:'my-token'})}}}}}};
+const identity={accounts:{oauth2:{initTokenClient(options){return {requestAccessToken(){options.callback({access_token:'my-token',scope:options.scope})}}}}}};
 const storage=(entries={})=>{const m=new Map(Object.entries(entries));return {getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v),has:k=>m.has(k)}};
 const validEmpty={version:1,profile:{startDate:'2026-11-16'},sessions:[],activities:[],measurements:[],active:null};
 test('conectar não envia nada antes de consentimento, e bloqueia outra conta no mesmo navegador',async()=>{
