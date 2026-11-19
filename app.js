@@ -224,9 +224,10 @@ function bodyComparison(key,title,unit){
 }
 
 function measurementPairRow(title,rightKey,leftKey,unit='cm'){
- const right=compareMeasure(db.measurements,rightKey).last;
- const left=compareMeasure(db.measurements,leftKey).last;
- const delta=right!==null&&left!==null?round1(right-left):null;
+ // Só compara lados medidos juntos, no mesmo registro, para evitar falsas assimetrias.
+ const latest=db.measurements.filter(m=>typeof m[rightKey]==='number'&&typeof m[leftKey]==='number').slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id))[0];
+ const right=latest?.[rightKey]??null,left=latest?.[leftKey]??null;
+ const delta=latest?round1(right-left):null;
  const show=x=>x===null?'—':x.toLocaleString('pt-BR')+' '+unit;
  return `<tr><th scope="row">${escapeHTML(title)}</th><td>${show(right)}</td><td>${show(left)}</td><td>${delta===null?'—':(delta>0?'+':'')+delta.toLocaleString('pt-BR')+' '+unit}</td></tr>`;
 }
@@ -273,7 +274,8 @@ function assessmentPage(){
  const values=[...db.measurements].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
  const previousHeight=compareMeasure(db.measurements,'heightCm').last;
  const bmi=calculateBMI(db.measurements);
- const estimated=estimatesFor(db.measurements),latest=values[0],expansion=latest?chestExcursion(latest):null;
+ const latestChest=values.find(v=>typeof v.chestCm==='number'&&typeof v.chestExpandedCm==='number');
+ const estimated=estimatesFor(db.measurements),expansion=latestChest?chestExcursion(latestChest):null;
  const lastMeasured=compareMeasure(db.measurements,'bodyFatPct').last;
  return `${header('ACOMPANHAMENTO CORPORAL','Avaliação corporal','Avalie medidas dos dois lados, evolução e fotografias privadas. Use sempre o mesmo método e horário aproximado.')}
  <div class="grid4">${bodyComparison('weightKg','Peso','kg')}${bodyComparison('waistCm','Cintura','cm')}${bodyComparison('chestCm','Tórax em repouso','cm')}${bodyComparison('chestExpandedCm','Tórax expandido','cm')}</div>
@@ -291,7 +293,7 @@ function assessmentPage(){
  ${bodyPhotoInputs()}<p class="disclaimer">As fotos serão comprimidas e salvas exclusivamente no armazenamento IndexedDB deste navegador. Não são enviadas ao GitHub. O backup JSON incluirá as fotos; proteja o arquivo, pois ele contém imagens pessoais.</p></div>
  <div class="setting-actions"><button class="button primary" data-action="save-assessment">${ico('check')} Salvar avaliação</button><button class="button outline" data-action="export-assessment-csv">${ico('download')} Exportar avaliações CSV</button></div>
  <p class="disclaimer">Preencha o peso ou pelo menos uma medida corporal. A altura isolada não constitui uma avaliação.</p></section>
- <section class="panel section"><div class="section-head"><h3 class="section-title">Comparação entre lados</h3><span class="section-kicker">Última medida registrada de cada lado</span></div><div class="body-comparison-overflow"><table class="body-comparison-table"><thead><tr><th>Região</th><th>Direita</th><th>Esquerda</th><th>Diferença D−E</th></tr></thead><tbody>
+ <section class="panel section"><div class="section-head"><h3 class="section-title">Comparação entre lados</h3><span class="section-kicker">Comparação da última avaliação com ambos os lados medidos</span></div><div class="body-comparison-overflow"><table class="body-comparison-table"><thead><tr><th>Região</th><th>Direita</th><th>Esquerda</th><th>Diferença D−E</th></tr></thead><tbody>
  ${measurementPairRow('Braço','armRightCm','armLeftCm')}${measurementPairRow('Comprimento da perna','legRightCm','legLeftCm')}${measurementPairRow('Coxa','thighRightCm','thighLeftCm')}${measurementPairRow('Panturrilha','calfRightCm','calfLeftCm')}</tbody></table></div></section>
  <div class="section grid2">${bodyTrend('weightKg','Evolução do peso','kg')}${bodyTrend('waistCm','Evolução da cintura','cm')}</div>
  <section class="section"><div class="section-head"><h3 class="section-title">Histórico de avaliações e fotos</h3><span class="section-kicker">${values.length} registro(s)</span></div>
