@@ -25,6 +25,11 @@ export function drivePhotoName(assessmentId,view){
  if(!validId(assessmentId)||!DRIVE_PHOTO_VIEWS.includes(view))throw new Error('Nome de avaliação inválido para fotos.');
  return assessmentId+'__'+view+'.jpg';
 }
+function stableJSON(value){
+ if(Array.isArray(value))return '['+value.map(stableJSON).join(',')+']';
+ if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+stableJSON(value[k])).join(',')+'}';
+ return JSON.stringify(value);
+}
 export function detectDataConflicts(local,remote){
  const issues=[];
  for(const section of ['sessions','activities','measurements']){
@@ -32,8 +37,7 @@ export function detectDataConflicts(local,remote){
   for(const item of remote?.[section]||[]){
    if(!a.has(item.id))continue;
    // Do not interpret JSON key order as a semantic conflict.
-   const canonical=x=>JSON.stringify(x,Object.keys(x).sort());
-   if(canonical(a.get(item.id))!==canonical(item))issues.push({section,id:item.id});
+   if(stableJSON(a.get(item.id))!==stableJSON(item))issues.push({section,id:item.id});
   }
  }
  return issues;
@@ -170,14 +174,23 @@ export function createGoogleDriveClient(accessToken,{fetchImpl=globalThis.fetch}
   if(blob.size>12*1024*1024)throw new Error('Imagem excede 12 MB.');
   return blob;
  }
+ async function fingerprint(blob){
+  if(!globalThis.crypto?.subtle)throw new Error('É necessária conexão HTTPS com Web Crypto para verificar a integridade da foto.');
+  const bytes=await blob.arrayBuffer();
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+ }
  async function writePhoto(folderId,assessmentId,view,blob,{overwrite=false}={}){
   if(!blob||!['image/jpeg','image/png','image/webp'].includes(blob.type)||blob.size>12*1024*1024)
    throw new Error('Arquivo de foto não é JPEG, PNG ou WebP válido de até 12 MB.');
   const name=drivePhotoName(assessmentId,view);
+  const hash=await fingerprint(blob);
   const existing=(await list(folderId,name))[0];
-  if(existing&&!overwrite)return {id:existing.id,skipped:true};
-  const id=await upsert(folderId,name,blob,blob.type,{appProperties:{assessmentId,view}});
-  return {id,skipped:false};
+  if(existing&&!overwrite){
+   return {id:existing.id,skipped:true,conflict:existing.appProperties?.sha256!==hash};
+  }
+  const id=await upsert(folderId,name,blob,blob.type,{appProperties:{assessmentId,view,sha256:hash}});
+  return {id,skipped:false,conflict:false};
  }
  return {about,list,folders,readHistory,writeHistory,listPhotos,downloadPhoto,writePhoto};
 }
