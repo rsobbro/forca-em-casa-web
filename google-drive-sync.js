@@ -5,6 +5,9 @@
  * Até a configuração do OAuth, a aplicação continua inteiramente local.
  */
 export const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+export const GOOGLE_IDENTITY_SCOPES='openid email profile';
+export const GOOGLE_AUTH_SCOPES=GOOGLE_DRIVE_SCOPE+' '+GOOGLE_IDENTITY_SCOPES;
+export const DRIVE_PROFILE_NAME='perfil.json';
 export const DRIVE_APP_FOLDER='Força em Casa';
 export const DRIVE_DATA_FOLDER='Dados';
 export const DRIVE_PHOTOS_FOLDER='Fotos';
@@ -74,7 +77,7 @@ export function authorizeDrive(clientId,googleApi=globalThis.google){
   const fail=message=>{if(!done){done=true;reject(new Error(message))}};
   try{
    const client=oauth.initTokenClient({
-    client_id:clientId,scope:GOOGLE_DRIVE_SCOPE,
+    client_id:clientId,scope:GOOGLE_AUTH_SCOPES,
     callback:response=>{
      if(response?.error||!response?.access_token){fail('A autorização Google foi recusada ou expirou.');return}
      succeed(response.access_token);
@@ -105,9 +108,16 @@ export function createGoogleDriveClient(accessToken,{fetchImpl=globalThis.fetch}
  const asJson=async(response)=>response.json();
  async function about(){
   const params=new URLSearchParams({fields:'user(emailAddress,displayName,permissionId)'});
-  const data=await asJson(await request(API+'/about?'+params));
-  if(!data?.user?.permissionId)throw new Error('Não foi possível confirmar a conta Google.');
-  return data.user;
+  const drive=await asJson(await request(API+'/about?'+params));
+  if(!drive?.user?.permissionId)throw new Error('Não foi possível confirmar a conta Google do Drive.');
+  // The OAuth token comes from Google Identity Services; userinfo independently
+  // verifies email, Google subject (sub) and email_verified on Google's servers.
+  const identity=await asJson(await request('https://www.googleapis.com/oauth2/v3/userinfo'));
+  if(!identity?.email_verified||!identity?.sub||!identity?.email)
+   throw new Error('A identidade Google não foi confirmada.');
+  if(!drive.user.emailAddress||drive.user.emailAddress.toLowerCase()!==identity.email.toLowerCase())
+   throw new Error('Conta Google do Drive diferente da conta autenticada.');
+  return {...drive.user,sub:String(identity.sub),email:identity.email,email_verified:true};
  }
  async function list(parent,name=null){
   const filters=["'"+escapeDriveQuery(parent)+"' in parents",'trashed = false'];
@@ -175,6 +185,20 @@ export function createGoogleDriveClient(accessToken,{fetchImpl=globalThis.fetch}
   try{body=await response.json()}catch{throw new Error('O arquivo historico.json no Drive não contém JSON válido.')}
   return normalizeCloudData(body);
  }
+ async function readProfile(folderId){
+  const profileFile=(await list(folderId,DRIVE_PROFILE_NAME)).find(x=>x.mimeType===JSON_MIME);
+  if(!profileFile)return null;
+  if(Number(profileFile.size)>64*1024)throw new Error('Cadastro do Drive excede o limite de 64 KB.');
+  let profile;
+  try{profile=await asJson(await request(API+'/files/'+encodeURIComponent(profileFile.id)+'?alt=media'));}
+  catch{throw new Error('Não foi possível interpretar o cadastro no Drive.')}
+  return profile;
+ }
+ async function writeProfile(folderId,profile){
+  const blob=new Blob([JSON.stringify(profile)],{type:JSON_MIME});
+  if(blob.size>64*1024)throw new Error('Perfil excede limite de 64 KB.');
+  return upsert(folderId,DRIVE_PROFILE_NAME,blob,JSON_MIME);
+ }
  async function writeHistory(folderId,data){
   const blob=new Blob([JSON.stringify(normalizeCloudData(data))],{type:JSON_MIME});
   if(blob.size>30*1024*1024)throw new Error('Histórico excede 30 MB.');
@@ -209,5 +233,5 @@ export function createGoogleDriveClient(accessToken,{fetchImpl=globalThis.fetch}
   if(!id)throw new Error('ID de arquivo inválido.');
   await request(API+'/files/'+encodeURIComponent(id),{method:'DELETE'});
  }
- return {about,list,folders,readHistory,writeHistory,listPhotos,downloadPhoto,writePhoto,deleteFile};
+ return {about,list,folders,readHistory,writeHistory,readProfile,writeProfile,listPhotos,downloadPhoto,writePhoto,deleteFile};
 }
