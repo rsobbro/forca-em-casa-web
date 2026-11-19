@@ -34,7 +34,7 @@ export function registerAccount(data,identity,now=new Date()){
  if(age<18)throw new Error('Nesta versão, o cadastro é destinado a pessoas com 18 anos ou mais.');
  const sex=String(data?.sex||'');
  if(!SEX_OPTIONS.some(x=>x.value===sex))throw new Error('Selecione uma opção no campo sexo.');
- if(data?.consent!==true)throw new Error('É necessário aceitar o armazenamento dos dados na sua conta Google.');
+ if(data?.consent!==true)throw new Error('É necessário aceitar o cadastro e o armazenamento local, antes de autorizar o Drive separadamente.');
  if(data?.emailConfirmation?.trim().toLowerCase()!==identity.email.trim().toLowerCase())
   throw new Error('O Gmail confirmado deve ser exatamente a conta autenticada.');
  return {
