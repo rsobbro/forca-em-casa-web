@@ -71,6 +71,14 @@ function scheduleCloudSync(){
  if(cloudTimer)clearTimeout(cloudTimer);
  cloudTimer=setTimeout(()=>{cloudTimer=null;syncCloud(true)},18000);
 }
+function refreshCloudSyncView(){
+ const route=getRoute();
+ if(route==='avaliacao'){
+  // Reescreve apenas o aviso do Drive: nunca destrói o formulário em edição.
+  const banner=app.querySelector?.('.cloud-assessment-banner');
+  if(banner)banner.outerHTML=driveAssessmentConsentPanel();
+ }else if(route==='configuracoes'||route==='evolucao')render();
+}
 async function syncCloud(silent=false){
  if(!cloud.connected||cloudBusy)return;
  cloudBusy=true;
@@ -80,15 +88,22 @@ async function syncCloud(silent=false){
   const result=await cloud.sync(db);
   db=result.db;
   localStorage.setItem(STORAGE_KEY,JSON.stringify(db));
-  cloudState='sincronizado';markCloudSaved();
-  cloudError=result.photos.conflicts?result.photos.conflicts+' foto(s) têm versões diferentes: nenhuma foi sobrescrita.':'';
-  if(!silent)toast('Dados e fotos sincronizados no seu Google Drive.');
-  if(['configuracoes','evolucao','avaliacao'].includes(getRoute()))render();
+  if(result.photos.conflicts){
+   cloudState='conflito';markCloudPending();
+   cloudError=result.photos.conflicts+' fotografia(s) têm versões diferentes no Drive. Nenhuma foi sobrescrita. Os dados estruturados foram enviados, mas as fotos precisam de resolução.';
+   if(!silent)toast('Histórico enviado, porém há conflito entre fotografias.');
+  }else{
+   cloudState='sincronizado';markCloudSaved();cloudError='';
+   if(!silent)toast('Histórico e fotografias confirmados pelo Google Drive.');
+  }
+  refreshCloudSyncView();
  }catch(err){
-  cloudState='erro';cloudError=err.message;
+  cloudState='erro';
+  cloudError=err instanceof Error?err.message:String(err);
   markCloudPending();
-  // A falha jamais deve apagar os dados locais nem exibir "salvo na nuvem".
-  if(!silent)toast('Falha na sincronização: '+err.message);
+  // Uma falha não apaga o cache nem confirma gravação em nuvem.
+  refreshCloudSyncView();
+  if(!silent)toast('Sincronização pendente. Consulte o diagnóstico na área de Avaliação ou Configurações.');
  }finally{cloudBusy=false}
 }
 async function connectCloud(){
@@ -398,6 +413,7 @@ function driveAssessmentConsentPanel(){
  if(cloud.connected){
   return `<section class="panel cloud-assessment-banner"><strong>${cloudPending?'Envio ao Google Drive pendente':'Google Drive autorizado'}</strong>
    <p>${cloudPending?'Seus dados estão neste dispositivo e ainda não têm confirmação de envio.':'Sua conta Gmail autorizou a gravação nos arquivos do Força em Casa.'}</p>
+   ${cloudError?'<small>Diagnóstico de sincronização — os dados locais continuam preservados:</small>':''}
    <button class="button outline" data-action="drive-sync">Sincronizar agora</button>
    ${cloudError?`<p role="alert" class="cloud-error">${escapeHTML(cloudError)}</p>`:''}</section>`;
  }
