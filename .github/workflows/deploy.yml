@@ -44,6 +44,23 @@ jobs:
           test -s _site/assessment-photos.js
           test -s _site/progress.js
           cp assets/* _site/assets/
+      - name: Preparar versão beta isolada para homologação
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin feature/google-drive-sync
+          beta_dir="$(mktemp -d)"
+          git archive FETCH_HEAD | tar -x -C "$beta_dir"
+          mkdir -p _site/beta/assets
+          for file in index.html styles.css app.js plan.js completion-import.js exercise-media.js activities.js equipment-audit.js exercise-videos.js measurements.js progress.js assessment-photos.js google-drive-sync.js google-drive-controller.js google-config.js registration.js gate.js sw.js manifest.webmanifest .nojekyll; do
+            test -s "$beta_dir/$file"
+            cp "$beta_dir/$file" "_site/beta/$file"
+          done
+          cp "$beta_dir"/assets/* _site/beta/assets/
+          grep -Fq 'src="./gate.js"' _site/beta/index.html
+          grep -Fq "apps.googleusercontent.com" _site/beta/google-config.js
+          # A área /beta/ usa recursos e service worker relativos ao próprio caminho.
+          test -s _site/index.html
+          test -s _site/beta/index.html
       - name: Enviar artefato estático
         uses: actions/upload-pages-artifact@v3
         with:
