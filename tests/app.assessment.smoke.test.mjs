@@ -24,6 +24,9 @@ test('avaliação corporal salva, compara e preserva treinos e atividades existe
  assert.equal(state.sessions.length,1);
  assert.equal(state.activities.length,1);
  assert.equal(state.measurements[0].weightKg,85);
+ assert.equal(store['forca-em-casa-v1-drive-pending'],'1');
+ assert.match(el('#app-content').innerHTML,/Autorizar Google Drive e salvar/);
+ assert.match(el('#app-content').innerHTML,/salva somente neste dispositivo/);
  el('#body-date').value='2026-11-18';
  el('#body-weightKg').value='84,0';
  el('#body-waistCm').value='90';
