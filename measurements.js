@@ -90,7 +90,37 @@ export function estimateNavyMale(heightCm,waistCm,neckCm){
  const pct=86.010*Math.log10((waistCm-neckCm)/inch)-70.041*Math.log10(heightCm/inch)+36.76;
  return pct>0&&pct<75?round1(pct):null;
 }
+/**
+ * Estimativas vinculadas a UMA avaliação. A cintura/pescoço/peso nunca
+ * vêm de outra data; a altura pode ser herdada da última avaliação anterior
+ * porque, em adultos, costuma ser estável no intervalo observado.
+ */
+export function estimateBodyFatForAssessment(record,history=[]){
+ if(!record||typeof record!=='object')return {rfm:null,navy:null,fatMassKg:null,leanMassKg:null,heightSource:null};
+ const candidates=(history||[]).filter(x=>x&&x.date<=record.date&&typeof x.heightCm==='number'&&Number.isFinite(x.heightCm))
+   .slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+ const height=typeof record.heightCm==='number'?record.heightCm:(candidates[0]?.heightCm??null);
+ const source=typeof record.heightCm==='number'?'mesma avaliação':height!==null?'avaliação anterior':null;
+ const waist=typeof record.waistCm==='number'?record.waistCm:null;
+ const neck=typeof record.neckCm==='number'?record.neckCm:null;
+ const rfm=estimateRFM(height,waist,'male');
+ const navy=estimateNavyMale(height,waist,neck);
+ const kg=typeof record.weightKg==='number'?record.weightKg:null;
+ const fatMassKg=rfm!==null&&kg!==null?round1(kg*rfm/100):null;
+ const leanMassKg=rfm!==null&&kg!==null?round1(kg*(1-rfm/100)):null;
+ return {rfm,navy,fatMassKg,leanMassKg,heightSource:source};
+}
+export function estimatedBodyFatSeries(measurements,method='rfm'){
+ if(!['rfm','navy'].includes(method))return [];
+ return (measurements||[]).filter(x=>x&&typeof x.date==='string')
+  .slice().sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)))
+  .map(x=>({date:x.date,value:estimateBodyFatForAssessment(x,measurements)[method]}))
+  .filter(x=>x.value!==null);
+}
 export function estimatesFor(measurements){
- const height=latestValue(measurements,'heightCm'),waist=latestValue(measurements,'waistCm'),neck=latestValue(measurements,'neckCm');
- return {rfm:estimateRFM(height,waist),navy:estimateNavyMale(height,waist,neck)};
+ const sorted=(measurements||[]).filter(x=>x&&typeof x.date==='string').slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+ const rfmEvaluation=sorted.find(x=>estimateBodyFatForAssessment(x,measurements).rfm!==null);
+ const navyEvaluation=sorted.find(x=>estimateBodyFatForAssessment(x,measurements).navy!==null);
+ return {rfm:rfmEvaluation?estimateBodyFatForAssessment(rfmEvaluation,measurements).rfm:null,
+ navy:navyEvaluation?estimateBodyFatForAssessment(navyEvaluation,measurements).navy:null};
 }
