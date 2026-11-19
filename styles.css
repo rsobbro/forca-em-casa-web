@@ -28,3 +28,42 @@
 .set-table tr.set-invalid input[data-edit="reps"]{border:2px solid #e9aa4f!important;box-shadow:0 0 0 2px #e9aa4f33}
 .set-table .done-btn{touch-action:manipulation}
 @media(max-width:640px){.session-entry-help{font-size:11px;padding:11px 12px}}
+
+/* Avaliações V1.4: antropometria bilateral, fotos privadas e estimativas. */
+.body-fat-panel{background:linear-gradient(140deg,#1b2926,#17212b)}
+.body-fat-results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.body-fat-results>div{border:1px solid #3d5149;border-radius:12px;background:#0e1b20;padding:15px;display:flex;flex-direction:column;gap:10px}
+.body-fat-results small{color:var(--muted);font-size:11px;line-height:1.5}
+.body-fat-results strong{font-size:25px;color:var(--lime)}
+.body-guidance{padding:13px 15px;background:#172a25;border:1px solid #375047;border-radius:10px;font-size:12px;color:#c0d4c8;line-height:1.7;margin:14px 0}
+.body-guidance strong{color:#dfffbd}
+.body-group-right input,.body-group-left input{border-left:3px solid #577966}
+.body-photo-section{border-top:1px solid var(--border);margin:22px 0 16px;padding-top:20px}
+.body-photo-section h3{font-size:16px;margin-bottom:8px}
+.body-photo-section>p{font-size:12px;color:var(--muted);line-height:1.7}
+.body-photo-slots,.body-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:15px 0}
+.body-photo-slot{background:#101c22;border:1px solid #3c4f56;border-radius:13px;padding:14px;min-width:0}
+.body-photo-slot label{display:block;margin-bottom:12px;cursor:pointer}
+.body-photo-slot strong,.body-gallery-slot strong{display:block;color:#d7eddd;font-size:12px;margin-bottom:7px}
+.body-photo-slot small{display:block;color:var(--muted);font-size:11px;line-height:1.5;min-height:32px}
+.body-photo-slot input[type=file]{color:var(--muted);width:100%;font-size:11px;padding:9px 5px;height:auto;min-height:45px}
+.body-photo-slot input::file-selector-button{border:1px solid #526850;border-radius:6px;background:#21392b;color:#ceefac;padding:6px;cursor:pointer;font-size:11px}
+.body-photo-preview{padding-top:12px}
+.body-photo-preview[hidden]{display:none}
+.body-photo-preview img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:9px;max-height:230px}
+.body-gallery{border-top:1px solid #35474d;padding:13px 16px;margin:0}
+.body-gallery-slot{border-radius:10px;border:1px solid #324750;padding:12px;min-width:0;background:#111e25}
+.body-gallery-slot img{width:100%;height:auto;max-height:250px;aspect-ratio:3/4;object-fit:contain;border-radius:8px;background:#0b141a}
+.body-gallery-slot small{font-size:11px;color:var(--muted)}
+.body-history-card{background:#16212a;border:1px solid #32424e;border-radius:13px;overflow:hidden}
+.body-history-card .history-entry{border:0;background:transparent;border-radius:0}
+.body-history-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.body-photo-editor{padding:14px 16px;border-top:1px solid #435a51}
+.body-photo-editor h4{margin-bottom:12px}
+.body-comparison-overflow{overflow-x:auto}
+.body-comparison-table{width:100%;border-collapse:collapse;min-width:460px}
+.body-comparison-table th,.body-comparison-table td{padding:12px 9px;border-bottom:1px solid #35454a;text-align:left;font-size:12px}
+.body-comparison-table th{color:#d3edc2}
+.body-comparison-table td{color:#c4d2d1}
+@media(max-width:850px){.body-photo-slots,.body-gallery,.body-fat-results{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.body-photo-slots,.body-gallery,.body-fat-results{grid-template-columns:1fr}.body-history-actions{width:100%}.body-photo-slot small{min-height:unset}.body-photo-preview img{max-height:320px}.body-gallery-slot img{max-height:320px}}

@@ -80,3 +80,11 @@ MIT. Código-fonte reutilizável e sem dependências externas.
 ## Evolução V1.3 — contagem e múltiplos navegadores
 
 A tela **Evolução** diferencia treinos de musculação e atividades adicionais. Registros manuais de treino concluído contam na frequência, mas não nas séries ou repetições, pois esses dados não foram fornecidos. A opção **Mesclar backup JSON** preserva o histórico do navegador atual, mescla por IDs e evita duplicar um treino manual para a mesma data/divisão. Os dados continuam exclusivamente no localStorage de cada dispositivo; GitHub Pages não sincroniza dados privados automaticamente. Para transferir, exporte JSON no dispositivo de origem e utilize Mesclar backup no dispositivo de destino.
+
+## Avaliação corporal V1.4
+- Fotos **frente, costas e lado com braços estendidos** são opcionais e associadas a cada avaliação. Guardadas no IndexedDB do próprio navegador, redimensionadas quando possível, jamais enviadas ao GitHub ou a serviços externos. Podem ser adicionadas mais tarde a registros antigos. O backup JSON inclui fotografias em base64 e pode ficar grande: guarde-o em local seguro.
+- Medidas bilaterais para braço, comprimento da perna (quadril ao tornozelo), coxa e panturrilha. Campos antigos genéricos continuam aceitos nos backups e no histórico.
+- Tórax em repouso e em inspiração máxima. A diferença é a amplitude inspiratória relativa ao repouso, e não uma medida clínica de excursão entre expiração máxima e inspiração máxima.
+- Altura informada como **1,73** é convertida para **173 cm**. Peso **83,300** é aceito como 83,3 kg.
+- Estimativa automática de gordura corporal masculina por **RFM** (altura e cintura) e fórmula **US Navy** (altura, cintura na altura do umbigo e pescoço). Não são exames de gordura corporal, e não é feita análise por fotografia. Resultado de exame, quando houver, é registrado separadamente.
+- Referências: Woolcott & Bergman, Scientific Reports 2018 (https://doi.org/10.1038/s41598-018-29362-1) e fórmula circunferencial US Navy publicada em https://pmc.ncbi.nlm.nih.gov/articles/PMC4831679/.
