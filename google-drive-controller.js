@@ -1,4 +1,4 @@
-import {authorizeDrive,createGoogleDriveClient,normalizeCloudData,normalizeDeleted,DELETE_CATEGORIES,drivePhotoName} from './google-drive-sync.js';
+import {authorizeIdentity,authorizeDrive,createGoogleDriveClient,normalizeCloudData,normalizeDeleted,DELETE_CATEGORIES,drivePhotoName} from './google-drive-sync.js';
 import {PHOTO_VIEWS,getAssessmentPhotos,saveAssessmentPhotos} from './assessment-photos.js';
 import {validGoogleIdentity,validRegistration} from './registration.js';
 
@@ -67,19 +67,29 @@ export class GoogleDriveController {
   confirmFn=globalThis.confirm,googleApi=globalThis.google}={}){
   this.clientId=clientId;this.fetchImpl=fetchImpl;this.storage=storage;this.photos=photos;
   this.confirmFn=confirmFn;this.googleApi=googleApi;this.client=null;this.user=null;this.folders=null;
-  this.busy=false;this.lastSync=null;
+  this.busy=false;this.lastSync=null;this.identity=null;
  }
- get connected(){return !!this.client&&!!this.user&&!!this.folders}
+ get authenticated(){return validGoogleIdentity(this.identity)}
+ get connected(){return this.authenticated&&!!this.client&&!!this.folders}
+ async authenticate(){
+  const {user}=await authorizeIdentity(this.clientId,this.googleApi||globalThis.google,this.fetchImpl);
+  if(!validGoogleIdentity(user))throw new Error('Somente Gmail verificado é aceito nesta versão.');
+  this.identity=user;this.user=user;
+  return {user};
+ }
  async connect(){
+  if(!this.authenticated)throw new Error('Primeiro faça login com seu Gmail.');
+  // MUST be called directly from a real user click; no awaits before popup.
   const token=await authorizeDrive(this.clientId,this.googleApi||globalThis.google);
   const client=createGoogleDriveClient(token,{fetchImpl:this.fetchImpl});
   const user=await client.about();
-  if(!validGoogleIdentity(user))throw new Error('O login exige uma conta Gmail válida, com e-mail confirmado pelo Google.');
+  if(!validGoogleIdentity(user)||user.sub!==this.identity.sub||
+    user.email.toLowerCase()!==this.identity.email.toLowerCase())
+   throw new Error('A conta autorizada para o Drive é diferente do Gmail do login. A gravação foi cancelada.');
   const existingOwner=this.storage?.getItem(DRIVE_OWNER_KEY);
-  if(existingOwner&&existingOwner!==user.permissionId){
-   throw new Error('Este navegador já está vinculado a outra conta Google. Use um perfil de navegador separado; não misturamos registros pessoais.');
-  }
-  // Folder creation only after the user authorizes in the browser.
+  if(existingOwner&&existingOwner!==user.permissionId)
+   throw new Error('Este navegador tem um Drive vinculado a outra conta. Use um perfil separado de navegador.');
+  // Pastas somente após o consentimento explícito para gravar arquivos.
   const folders=await client.folders();
   this.client=client;this.user=user;this.folders=folders;
   return {user,folders};
@@ -157,5 +167,5 @@ export class GoogleDriveController {
   }
   return stats;
  }
- disconnect(){this.client=null;this.user=null;this.folders=null;this.lastSync=null}
+ disconnect(){this.client=null;this.user=null;this.identity=null;this.folders=null;this.lastSync=null}
 }
