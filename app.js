@@ -59,6 +59,12 @@ let cloudState=AUTH_CONTEXT?.controller?.connected?'sincronizado':'desconectado'
 let cloudError='';
 let cloudTimer=null;
 let cloudBusy=false;
+let drivePromptVisible=false;
+let assessmentPhotoWrite=Promise.resolve();
+let cloudPending=localStorage.getItem(STORAGE_KEY+'-drive-pending')==='1';
+function markCloudPending(){cloudPending=true;localStorage.setItem(STORAGE_KEY+'-drive-pending','1')}
+function markCloudSaved(){cloudPending=false;drivePromptVisible=false;localStorage.removeItem(STORAGE_KEY+'-drive-pending')}
+
 const cloud=AUTH_CONTEXT?.controller||new GoogleDriveController({clientId:GOOGLE_OAUTH_CLIENT_ID});
 function scheduleCloudSync(){
  if(!cloud.connected||cloudBusy)return;
@@ -74,12 +80,13 @@ async function syncCloud(silent=false){
   const result=await cloud.sync(db);
   db=result.db;
   localStorage.setItem(STORAGE_KEY,JSON.stringify(db));
-  cloudState='sincronizado';
+  cloudState='sincronizado';markCloudSaved();
   cloudError=result.photos.conflicts?result.photos.conflicts+' foto(s) têm versões diferentes: nenhuma foi sobrescrita.':'';
   if(!silent)toast('Dados e fotos sincronizados no seu Google Drive.');
-  if(getRoute()==='configuracoes'||getRoute()==='evolucao')render();
+  if(['configuracoes','evolucao','avaliacao'].includes(getRoute()))render();
  }catch(err){
   cloudState='erro';cloudError=err.message;
+  markCloudPending();
   // A falha jamais deve apagar os dados locais nem exibir "salvo na nuvem".
   if(!silent)toast('Falha na sincronização: '+err.message);
  }finally{cloudBusy=false}
@@ -89,14 +96,23 @@ async function connectCloud(){
   toast('Falta configurar o Client ID OAuth do Google Cloud.');return;
  }
  if(cloudBusy)return;
- cloudBusy=true;cloudState='conectando';cloudError='';
+ // Esta função somente é chamada diretamente pelo clique explícito do usuário.
+ // A abertura do popup OAuth acontece dentro de cloud.connect(), sem await prévio.
+ cloudBusy=true;cloudState='solicitando autorização';cloudError='';
  try{
   const {user}=await cloud.connect();
-  cloudState='conectado';
-  toast('Conta '+user.emailAddress+' autorizada. Preparando sincronização.');
+  if(AUTH_CONTEXT&&user.sub!==AUTH_CONTEXT.user.sub)throw new Error('A conta do Drive é diferente da conta Gmail do login.');
+  const profile=await cloud.loadProfile();
+  if(!profile&&AUTH_CONTEXT?.profile)await cloud.saveProfile(AUTH_CONTEXT.profile);
+  else if(profile&&AUTH_CONTEXT?.profile&&profile.googleSub!==AUTH_CONTEXT.profile.googleSub)
+   throw new Error('O cadastro do Google Drive pertence a outra pessoa.');
+  cloudState='autorizado';
+  await assessmentPhotoWrite; // aguardar gravação local das fotos
  }catch(err){
-  cloudState='erro';cloudError=err.message;toast('Google Drive: '+err.message);
-  cloudBusy=false; if(getRoute()==='configuracoes')render();
+  cloudState='erro';cloudError=err.message;
+  toast('Drive não autorizado. Sua avaliação está salva somente neste dispositivo: '+err.message);
+  cloudBusy=false;
+  if(['configuracoes','avaliacao'].includes(getRoute()))render();
   return;
  }
  cloudBusy=false;
@@ -378,6 +394,27 @@ function updateBodyFatPreview(){
   if(result.heightSource==='avaliação anterior')status.textContent+=' A altura utilizada veio de uma avaliação anterior.';
  }
 }
+function driveAssessmentConsentPanel(){
+ if(cloud.connected){
+  return `<section class="panel cloud-assessment-banner"><strong>${cloudPending?'Envio ao Google Drive pendente':'Google Drive autorizado'}</strong>
+   <p>${cloudPending?'Seus dados estão neste dispositivo e ainda não têm confirmação de envio.':'Sua conta Gmail autorizou a gravação nos arquivos do Força em Casa.'}</p>
+   <button class="button outline" data-action="drive-sync">Sincronizar agora</button>
+   ${cloudError?`<p role="alert" class="cloud-error">${escapeHTML(cloudError)}</p>`:''}</section>`;
+ }
+ if(!cloudPending){
+  return `<div class="body-guidance"><strong>Privacidade:</strong> seu Gmail é utilizado para acessar o sistema, mas ainda não temos permissão para salvar nada no Drive. Ao salvar a primeira avaliação, você poderá autorizar o envio.</div>`;
+ }
+ return `<section class="panel cloud-assessment-banner" role="region" aria-label="Autorizar salvamento no Google Drive">
+   <div class="section-head"><h3 class="section-title">Autorizar salvamento na sua conta Google Drive</h3><span class="section-kicker">Ação necessária</span></div>
+   <p>Esta avaliação está <strong>salva somente neste dispositivo</strong>. Para acessá-la em outros aparelhos, você deve autorizar o Força em Casa a criar e atualizar <strong>seus próprios arquivos</strong> nas pastas Dados e Fotos do seu Gmail.</p>
+   <p><strong>O sistema não terá acesso geral ao seu Drive.</strong> O Google mostrará a tela oficial de consentimento para a permissão <code>drive.file</code>. Você poderá recusar; nesse caso, nada será enviado e a avaliação permanecerá local.</p>
+   <div class="setting-actions">
+    <button class="button primary" data-action="drive-authorize-assessment" ${cloudBusy?'disabled':''}>Autorizar Google Drive e salvar</button>
+    ${drivePromptVisible?`<button class="button outline" data-action="drive-consent-later">Agora não — manter somente neste dispositivo</button>`:''}
+   </div>
+   ${cloudError?`<p class="cloud-error" role="alert">${escapeHTML(cloudError)}</p>`:''}
+   </section>`;
+}
 function assessmentPage(){
  const values=[...db.measurements].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
  const previousHeight=compareMeasure(db.measurements,'heightCm').last;
@@ -387,7 +424,7 @@ function assessmentPage(){
  const fatTrend=estimatedBodyFatSeries(db.measurements,'rfm',ESTIMATE_SEX);
  const latestFatDate=fatTrend.at(-1)?.date||null;
  const lastMeasured=compareMeasure(db.measurements,'bodyFatPct').last;
- return `${header('ACOMPANHAMENTO CORPORAL','Avaliação corporal','Avalie medidas dos dois lados, evolução e fotografias privadas. Use sempre o mesmo método e horário aproximado.')}
+ return `${header('ACOMPANHAMENTO CORPORAL','Avaliação corporal','Avalie medidas dos dois lados, evolução e fotografias privadas. Use sempre o mesmo método e horário aproximado.')}${driveAssessmentConsentPanel()}
  <div class="grid4">${bodyComparison('weightKg','Peso','kg')}${bodyComparison('waistCm','Cintura','cm')}${bodyComparison('chestCm','Tórax em repouso','cm')}${bodyComparison('chestExpandedCm','Tórax expandido','cm')}</div>
  <div class="body-assessment-note">IMC calculado: <strong>${bmi===null?'—':String(bmi).replace('.',',')}</strong> · Amplitude inspiratória (repouso → inspiração máxima): <strong>${expansion===null?'—':expansion.toLocaleString('pt-BR')+' cm'}</strong>. O IMC não indica diretamente gordura corporal. A amplitude não substitui avaliação clínica de expansibilidade torácica.</div>
  <section class="panel section body-fat-panel"><div class="section-head"><h3 class="section-title">Gordura corporal — estimativas por medidas</h3><span class="section-kicker">Sem necessidade de balança de bioimpedância</span></div>
@@ -432,9 +469,15 @@ function saveAssessment(){
  if(!validBodyMeasurement(record)){toast('Informe peso ou pelo menos uma medida corporal.');return}
  if(db.measurements.some(x=>x.date===date)&&!confirm('Já existe avaliação nesta data. Deseja adicionar outra?'))return;
  db.measurements.push(record);save();go('avaliacao');
+ if(!cloud.connected){markCloudPending();drivePromptVisible=true;}
  if(Object.keys(photos).length){
-  saveAssessmentPhotos(id,photos).then(()=>{renderBodyPhotos();scheduleCloudSync();toast('Avaliação e fotos salvas neste navegador.')}).catch(err=>toast('Medidas salvas, mas fotos falharam: '+err.message));
- }else toast('Avaliação salva somente neste navegador.');
+  assessmentPhotoWrite=saveAssessmentPhotos(id,photos).then(()=>{
+   renderBodyPhotos();if(cloud.connected)scheduleCloudSync();
+  }).catch(err=>{toast('As medidas foram salvas, mas houve falha nas fotos: '+err.message)});
+ }else assessmentPhotoWrite=Promise.resolve();
+ if(!cloud.connected){render();toast('Avaliação salva localmente. Autorize o Drive para sincronizar.');}
+ else toast('Avaliação salva localmente. Enviando para o Drive autorizado...');
+
 }
 function saveEditedAssessmentPhotos(id){
  if(!db.measurements.some(x=>x.id===id)){toast('Avaliação não localizada.');return}
@@ -442,7 +485,7 @@ function saveEditedAssessmentPhotos(id){
  if(!files)return;
  if(!Object.keys(files).length){toast('Selecione ao menos uma foto para salvar.');return}
  saveAssessmentPhotos(id,files).then(()=>{
-  photoEditId=null;render();scheduleCloudSync();toast('Fotos desta avaliação atualizadas.');
+  photoEditId=null;if(!cloud.connected){markCloudPending();drivePromptVisible=true;}render();if(cloud.connected)scheduleCloudSync();toast(cloud.connected?'Fotos salvas localmente; sincronização iniciada.':'Fotos locais salvas; autorize o Drive para sincronizar.');
  }).catch(err=>toast('Não foi possível salvar as fotos: '+err.message));
 }
 function exportAssessmentCSV(){
@@ -462,11 +505,11 @@ function cloudSettingsPanel(){
   <div class="active-label">05 · CONTA E NUVEM</div>
   <h3 style="margin-top:12px">Conta pessoal e Google Drive</h3>
   ${person?`<div class="cloud-identity"><strong>${escapeHTML(person.name)}</strong><small>Gmail: ${escapeHTML(person.email)} · Idade: ${years??'—'} · Sexo: ${person.sex==='masculino'?'Masculino':person.sex==='feminino'?'Feminino':'Prefiro não informar'}</small></div>`:''}
-  <p>Os dados e fotos serão armazenados na sua conta Google, dentro de <strong>Força em Casa / Dados</strong> e <strong>Força em Casa / Fotos</strong>. Cada usuário autoriza somente os arquivos deste aplicativo.</p>
+  <p>Seu Gmail confirma a identidade, mas <strong>não autoriza o Google Drive automaticamente</strong>. Ao salvar uma avaliação, você decide se permite criar e atualizar arquivos em <strong>Força em Casa / Dados</strong> e <strong>Força em Casa / Fotos</strong>.</p>
   ${enabled?
    `<div class="cloud-identity"><strong>${connected?'Conectado: '+escapeHTML(account):'Conta Google não conectada'}</strong><small>Estado: ${escapeHTML(cloudState)}${cloud.lastSync?' · Última sincronização: '+new Date(cloud.lastSync).toLocaleString('pt-BR'):''}</small></div>
    <div class="setting-actions">
-    <button class="button primary" data-action="drive-connect" ${cloudBusy||connected?'disabled':''}>${ico('cloud',16)} ${connected?'Conta autenticada':'Entrar com Google'}</button>
+    <button class="button primary" data-action="drive-connect" ${cloudBusy||connected?'disabled':''}>${ico('cloud',16)} ${connected?'Drive autorizado':'Autorizar Google Drive'}</button>
     ${connected?`<button class="button outline" data-action="drive-sync" ${cloudBusy?'disabled':''}>${ico('check',16)} Sincronizar agora</button><button class="button outline" data-action="drive-disconnect">Sair da conta</button>`:''}
    </div>
    ${folders?`<small>Pastas privadas criadas/identificadas no Drive desta conta.</small>`:''}
@@ -572,7 +615,7 @@ try{
  toast('Backup importado. '+recovered+' foto(s) restaurada(s).');
 }catch(err){toast('Dados importados; fotos não puderam ser importadas: '+err.message)}
 }
-function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;render();return}
+function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='drive-authorize-assessment'){connectCloud();return}if(a==='drive-consent-later'){drivePromptVisible=false;render();return}if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;render();return}
 if(a==='cancel-photo-editor'){photoEditId=null;render();return}
 if(a==='save-assessment-photos'){saveEditedAssessmentPhotos(btn.dataset.id);return}
 if(a==='delete-assessment'){if(confirm('Excluir esta avaliação corporal e suas fotos neste navegador?')){
