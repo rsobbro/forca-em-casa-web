@@ -71,3 +71,69 @@ test('não permite domínio não-Gmail mesmo quando o token OAuth é válido',as
  assert.equal(posts,0);
  assert.equal(ctrl.connected,false);
 });
+
+test('primeira sincronização preserva contexto de window.confirm e não produz Illegal invocation',async()=>{
+ const previous=globalThis.confirm;
+ let approvals=0,writes=0;
+ globalThis.confirm=function(message){
+  assert.equal(this,globalThis,'A função nativa requer contexto Window');
+  assert.match(message,/Vincular os dados/);
+  approvals++;return true;
+ };
+ try{
+  const store=storage();
+  const controller=new GoogleDriveController({
+   clientId:CLIENT_ID,storage:store,
+   photos:{getAssessmentPhotos:async()=>({}),saveAssessmentPhotos:async()=>{}}
+  });
+  const account={sub:'12345678901234567890',email:'exemplo@gmail.com',
+   email_verified:true,permissionId:'drive-owner-test',emailAddress:'exemplo@gmail.com'};
+  controller.identity=account;controller.user=account;
+  controller.folders={root:'root',data:'data',photos:'photos'};
+  controller.client={
+   readHistory:async()=>null,
+   listPhotos:async()=>[],
+   writeHistory:async(folder,snapshot)=>{
+    assert.equal(folder,'data');
+    assert.equal(snapshot.measurements.length,1);
+    writes++;
+   }
+  };
+  const local={...validEmpty,measurements:[{id:'assessment-test',date:'2026-11-16',weightKg:83.3}]};
+  const result=await controller.sync(local);
+  assert.equal(approvals,1);
+  assert.equal(writes,1);
+  assert.equal(store.getItem(DRIVE_OWNER_KEY),account.permissionId);
+  assert.equal(result.db.measurements.length,1);
+  assert.ok(result.lastSync);
+ }finally{
+  if(previous===undefined)delete globalThis.confirm;
+  else globalThis.confirm=previous;
+ }
+});
+test('o fetch nativo mantém seu receptor Window durante o login Google',async()=>{
+ const previous=globalThis.fetch;
+ let requested=0;
+ globalThis.fetch=function(url,options){
+  assert.equal(this,globalThis,'A função nativa requer contexto Window');
+  assert.match(url,/oauth2\/v3\/userinfo/);
+  assert.match(options.headers.Authorization,/Bearer my-token/);
+  requested++;
+  return Promise.resolve(new Response(JSON.stringify({
+   sub:'12345678901234567890',email:'testador@gmail.com',email_verified:true
+  }),{status:200,headers:{'Content-Type':'application/json'}}));
+ };
+ try{
+  const controller=new GoogleDriveController({clientId:CLIENT_ID,storage:storage(),googleApi:identity});
+  const result=await controller.authenticate();
+  assert.equal(requested,1);
+  assert.equal(result.user.email,'testador@gmail.com');
+ }finally{
+  globalThis.fetch=previous;
+ }
+});
+test('interface reabilita o botão de sincronizar mesmo após uma exceção',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const app=readFileSync(new URL('../app.js',import.meta.url),'utf8');
+ assert.match(app,/finally\{\s*cloudBusy=false;[\s\S]*?refreshCloudSyncView\(\);\s*\}/);
+});
