@@ -98,3 +98,17 @@ inspecione o cache local não criptografado. Os arquivos privados do Drive
 são protegidos pelas permissões OAuth do Google. Para controle de acesso robusto
 e persistente, migrar posteriormente para um backend/BFF com verificação de
 ID tokens, sessões seguras, criptografia do cache e regras de autorização.
+
+## V1.7 beta — autorização incremental no momento do primeiro salvamento
+
+- Login Gmail solicita apenas `openid email profile`. Nenhuma permissão de arquivos é pedida nesse momento.
+- Cadastro com nome, nascimento, sexo e Gmail verificado é salvo inicialmente no cache local da conta.
+- O sistema informa que dados de avaliação e fotos dependerão de autorização separada para salvamento em nuvem.
+- Ao salvar avaliação, os dados são primeiro preservados localmente, com status **Pendente no Drive**.
+- Uma ação explícita **Autorizar Google Drive e salvar** inicia o popup Google OAuth para `drive.file`, vinculado à mesma identidade Gmail.
+- Depois do consentimento, o aplicativo cria as pastas privadas, guarda `perfil.json`, `historico.json` e fotografias. Mostra sucesso somente após confirmação de upload da API.
+- Se o usuário recusar permissão, fechar a janela, ou estiver offline, não perde as medidas: continuam somente neste dispositivo, aguardando autorização.
+- A recuperação de dados em outro navegador requer ação distinta **Recuperar do meu Google Drive**, com autorização explícita.
+- Nenhum token ou senha é guardado no armazenamento persistente.
+
+**Antes de publicar:** configurar OAuth Client ID real do Google Cloud, testar login/consentimento/recusa/recuperação e avaliar backend para autenticação e autorização robustas. Este código continua isolado da versão pública na branch beta.
