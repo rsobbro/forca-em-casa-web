@@ -69,3 +69,32 @@ Documentação oficial:
 - https://developers.google.com/workspace/drive/api/guides/api-specific-auth
 - https://developers.google.com/workspace/drive/api/guides/create-file
 - https://developers.google.com/workspace/drive/api/guides/manage-uploads
+
+## V1.6 beta — cadastro e login obrigatórios
+
+1. A página inicial **não importa `app.js`** até o usuário autenticar a conta
+   Google e o cadastro ser confirmado no Drive; `gate.js` controla o acesso.
+2. O OAuth solicita `openid email profile` e `drive.file`. A identidade é
+   confirmada por `GET https://www.googleapis.com/oauth2/v3/userinfo`
+   com `email_verified=true`, identificador `sub` e email, e cruzada com
+   `Drive about.get` para a mesma conta.
+3. O cadastro exige nome completo, data de nascimento (idade calculada),
+   sexo ou opção de não informar, Gmail autenticado, e aceite explícito para
+   armazenamento de dados pessoais. A beta é destinada a maiores de 18 anos.
+4. Cadastro salvo em `Dados/perfil.json` **antes de liberar a interface**.
+   Login seguinte encontra esse perfil no Drive, valida o proprietário e
+   carrega o histórico. Nenhuma senha é solicitada pelo site.
+5. O cache local usa chave por `sub` do Google; um cache da versão anterior
+   só é importado após confirmação explícita de que pertence à pessoa logada.
+6. Logout limpa a sessão OAuth em memória e recarrega a tela de login. Tokens
+   OAuth nunca são salvos em localStorage.
+7. Sem Client ID público configurado, o acesso beta fica bloqueado, em vez
+   de liberar uma versão sem autenticação.
+
+**Limitação de segurança importante:** GitHub Pages é um site estático. Este
+portão de acesso é uma proteção da interface, **não** substitui uma sessão
+autenticada no servidor nem impede que alguém com acesso físico ao navegador
+inspecione o cache local não criptografado. Os arquivos privados do Drive
+são protegidos pelas permissões OAuth do Google. Para controle de acesso robusto
+e persistente, migrar posteriormente para um backend/BFF com verificação de
+ID tokens, sessões seguras, criptografia do cache e regras de autorização.

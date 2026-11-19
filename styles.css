@@ -91,3 +91,34 @@
 .cloud-settings a{color:var(--lime)}
 .cloud-settings button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:640px){.cloud-settings .setting-actions{display:flex;flex-direction:column}.cloud-settings button{width:100%}}
+
+/* Cadastro obrigatório antes da importação do aplicativo — V1.6 beta */
+body.auth-locked .sidebar,body.auth-locked .mobile-nav,body.auth-locked .app-footer,
+body.auth-locked .topbar-breadcrumb,body.auth-locked .topbar-right,body.auth-locked #timer{display:none!important}
+body.auth-locked .app-shell{display:block;min-height:100vh}
+body.auth-locked .content-shell{min-height:100vh;margin:0!important;width:100%!important;max-width:none!important}
+body.auth-locked .topbar{justify-content:center;min-height:72px}
+body.auth-locked #app-content{max-width:100%;width:100%;padding:0!important;margin:0 auto}
+.auth-layout{display:flex;justify-content:center;align-items:center;min-height:calc(100dvh - 75px);padding:22px 14px 44px}
+.auth-card{width:min(100%,550px);border:1px solid #3b594b;border-radius:22px;padding:clamp(20px,4vw,34px);background:linear-gradient(125deg,#192b25,#15232b);box-shadow:0 18px 50px #0004}
+.auth-brand{display:flex;align-items:center;gap:15px;margin-bottom:24px}
+.auth-brand .brand-symbol{flex-shrink:0;width:56px;height:56px;display:grid;place-items:center;font-weight:900;font-size:28px;border-radius:14px;background:#c8f86c;color:#17331e}
+.auth-brand small{font-size:10px;letter-spacing:.13em;font-weight:750;color:#aee18e}
+.auth-brand h1{font-weight:850;font-size:22px;margin:6px 0}
+.auth-card h2{font-size:25px;line-height:1.25;margin:0 0 12px}
+.auth-card>p{font-size:13px;line-height:1.8;color:#c1d1c8}
+.auth-google-button{width:100%;min-height:49px;margin:17px 0 11px;text-align:center;justify-content:center}
+.auth-warning{background:#3a301e;border:1px solid #ab8b42;color:#f7dfae!important;border-radius:11px;padding:15px}
+.auth-error{background:#3d2121;color:#ffd3d3!important;border:1px solid #a55757;border-radius:11px;padding:12px;margin:12px 0}
+.auth-muted,.auth-disclaimer{font-size:11px!important;color:#a7b7af!important;margin-top:15px!important;line-height:1.75!important}
+.auth-form{display:grid;gap:15px;margin:19px 0}
+.auth-form .form-field{margin:0}
+.auth-form label{display:block;font-size:12px;font-weight:700;margin-bottom:7px}
+.auth-form input,.auth-form select{min-height:47px}
+.auth-form small{display:block;color:#a4bcb0;font-size:11px;margin-top:6px;line-height:1.4}
+.auth-form [readonly]{opacity:.86;cursor:default}
+.auth-consent{display:flex!important;gap:10px;font-size:12px!important;font-weight:500!important;line-height:1.55;align-items:flex-start}
+.auth-consent input{flex:0 0 20px;min-height:20px!important;margin:1px 0 0}
+.auth-back{display:block;margin:8px auto 0}
+.auth-splash{text-align:center;padding:15vh 18px;color:#b8cebc}
+@media(max-width:600px){.auth-layout{align-items:flex-start;padding-top:16px}.auth-card{border-radius:16px}.auth-brand h1{font-size:20px}}

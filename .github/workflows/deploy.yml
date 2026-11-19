@@ -34,7 +34,7 @@ jobs:
       - name: Preparar os arquivos do site
         run: |
           mkdir -p _site/assets
-          cp index.html styles.css app.js plan.js completion-import.js exercise-media.js activities.js equipment-audit.js exercise-videos.js measurements.js progress.js assessment-photos.js google-drive-sync.js google-drive-controller.js google-config.js sw.js manifest.webmanifest .nojekyll _site/
+          cp index.html styles.css app.js plan.js completion-import.js exercise-media.js activities.js equipment-audit.js exercise-videos.js measurements.js progress.js assessment-photos.js google-drive-sync.js google-drive-controller.js google-config.js registration.js gate.js sw.js manifest.webmanifest .nojekyll _site/
           test -s _site/completion-import.js
           test -s _site/exercise-media.js
           test -s _site/activities.js
@@ -45,6 +45,8 @@ jobs:
           test -s _site/google-drive-sync.js
           test -s _site/google-drive-controller.js
           test -s _site/google-config.js
+          test -s _site/registration.js
+          test -s _site/gate.js
           test -s _site/progress.js
           cp assets/* _site/assets/
       - name: Enviar artefato estático
