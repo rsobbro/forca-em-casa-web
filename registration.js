@@ -21,7 +21,7 @@ export function getAge(birthDate,now=new Date()){
 export function validGoogleIdentity(identity){
  return !!identity&&typeof identity.sub==='string'&&/^[0-9]{8,40}$/.test(identity.sub)
   &&identity.email_verified===true&&isGmailAddress(identity.email)
-  &&typeof identity.permissionId==='string'&&identity.permissionId.length>0;
+;
 }
 export function registerAccount(data,identity,now=new Date()){
  if(!validGoogleIdentity(identity))throw new Error('É necessário autenticar uma conta Gmail confirmada pelo Google.');
@@ -40,7 +40,7 @@ export function registerAccount(data,identity,now=new Date()){
  return {
   version:REGISTRATION_VERSION,
   googleSub:identity.sub,
-  googlePermissionId:identity.permissionId,
+  googlePermissionId:identity.permissionId||null,
   email:identity.email.toLowerCase(),
   name,birthDate,sex,
   consentVersion:'1.0',
@@ -50,8 +50,8 @@ export function registerAccount(data,identity,now=new Date()){
 }
 export function validRegistration(profile,identity,now=new Date()){
  if(!validGoogleIdentity(identity)||!profile||profile.version!==REGISTRATION_VERSION)return false;
- if(profile.googleSub!==identity.sub||profile.googlePermissionId!==identity.permissionId||
-    profile.email?.toLowerCase()!==identity.email.toLowerCase())return false;
+ if(profile.googleSub!==identity.sub||profile.email?.toLowerCase()!==identity.email.toLowerCase())return false;
+ if(profile.googlePermissionId&&identity.permissionId&&profile.googlePermissionId!==identity.permissionId)return false;
  if(typeof profile.name!=='string'||profile.name.trim().length<3||profile.name.length>100)return false;
  const age=getAge(profile.birthDate,now);
  if(age===null||age<18)return false;
