@@ -68,7 +68,7 @@ test('cria pastas e historico.json no Drive do usuário autorizado, lê novament
  const snapshot={version:1,profile:{startDate:'2026-11-16'},sessions:[],activities:[],measurements:[],active:null};
  assert.equal(await client.readHistory(dirs.data),null);
  await client.writeHistory(dirs.data,snapshot);
- assert.deepEqual(await client.readHistory(dirs.data),snapshot);
+ assert.deepEqual(await client.readHistory(dirs.data),{...snapshot,deleted:{sessions:[],activities:[],measurements:[]}});
  assert.equal(mock.files.filter(x=>x.name==='historico.json').length,1);
 });
 test('faz upload de foto privada separada de historico.json, sem sobrescrever sem consentimento',async()=>{
