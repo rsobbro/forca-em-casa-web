@@ -9,13 +9,14 @@ test('conectar não envia nada antes de consentimento, e bloqueia outra conta no
  let calls=0;
  const fetchImpl=async(url)=>{
   calls++;
-  if(url.includes('/about?'))return new Response(JSON.stringify({user:{permissionId:'different-owner',emailAddress:'someone@example.com'}}),{status:200});
+  if(url.includes('/about?'))return new Response(JSON.stringify({user:{permissionId:'different-owner',emailAddress:'someone@gmail.com'}}),{status:200});
+  if(url.includes('/userinfo'))return new Response(JSON.stringify({sub:'12345678901234567890',email:'someone@gmail.com',email_verified:true}),{status:200});
   throw new Error('Sem permissão para chamar mais APIs.');
  };
  const store=storage({[DRIVE_OWNER_KEY]:'original-owner'});
  const controller=new GoogleDriveController({clientId:CLIENT_ID,storage:store,fetchImpl,googleApi:identity});
  await assert.rejects(controller.connect(),/outra conta Google/);
- assert.equal(calls,1); // about.get only; folder not created after mismatch
+ assert.equal(calls,2); // about.get e userinfo; nenhuma pasta criada após divergência
  assert.equal(controller.connected,false);
 });
 test('não declara conexão ativa sem OAuth Client ID válido',async()=>{

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {GOOGLE_DRIVE_SCOPE,googleClientIdConfigured,authorizeDrive,createGoogleDriveClient,detectDataConflicts,drivePhotoName,escapeDriveQuery} from '../google-drive-sync.js';
+import {GOOGLE_DRIVE_SCOPE,GOOGLE_AUTH_SCOPES,googleClientIdConfigured,authorizeDrive,createGoogleDriveClient,detectDataConflicts,drivePhotoName,escapeDriveQuery} from '../google-drive-sync.js';
 
 const CLIENT_ID='123456789012-this-is-an-oauth-app.apps.googleusercontent.com';
 function mockDrive(){
@@ -9,6 +9,7 @@ function mockDrive(){
  const fetchImpl=async(url,opts={})=>{
   const u=new URL(url),method=opts.method||'GET';calls.push({url:u.toString(),method});
   if(u.pathname==='/drive/v3/about')return json({user:{permissionId:'owner-1',displayName:'Teste',emailAddress:'teste@gmail.com'}});
+  if(u.pathname==='/oauth2/v3/userinfo')return json({sub:'12345678901234567890',email:'teste@gmail.com',email_verified:true});
   if(u.pathname==='/drive/v3/files'&&method==='GET'){
    const q=u.searchParams.get('q')||'';
    const parent=q.match(/'([^']+)' in parents/)?.[1];
@@ -53,13 +54,15 @@ test('autorização usa popup e token em memória sem segredo',async()=>{
  const fake={accounts:{oauth2:{initTokenClient(options){received=options;return {requestAccessToken(){options.callback({access_token:'access-abc'})}}}}}};
  const token=await authorizeDrive(CLIENT_ID,fake);
  assert.equal(token,'access-abc');
- assert.equal(received.scope,GOOGLE_DRIVE_SCOPE);
+ assert.equal(received.scope,GOOGLE_AUTH_SCOPES);
  await assert.rejects(authorizeDrive('',fake),/Client ID/);
 });
 test('cria pastas e historico.json no Drive do usuário autorizado, lê novamente',async()=>{
  const mock=mockDrive(),client=createGoogleDriveClient('token-abc',{fetchImpl:mock.fetchImpl});
  const about=await client.about();
  assert.equal(about.emailAddress,'teste@gmail.com');
+ assert.equal(about.sub,'12345678901234567890');
+ assert.equal(about.email_verified,true);
  const dirs=await client.folders();
  assert.ok(dirs.root&&dirs.data&&dirs.photos);
  assert.equal(mock.files.filter(x=>x.mimeType==='application/vnd.google-apps.folder').length,3);
