@@ -13,6 +13,7 @@ import {ACTIVITY_TYPES,ACTIVITY_INTENSITIES,activityType,validActivity,validISO,
 import {parseCompletionHash,mergeCompletedSessions,getMissingScheduledSessions} from './completion-import.js';
 
 const AUTH_CONTEXT=globalThis.__FORCA_AUTH_CONTEXT||null;
+const ESTIMATE_SEX=AUTH_CONTEXT?.profile?.sex==='feminino'?'female':AUTH_CONTEXT?.profile?.sex==='masculino'?'male':AUTH_CONTEXT?null:'male';
 const STORAGE_KEY=AUTH_CONTEXT?.cacheKey||'forca-em-casa-v1';
 const $=sel=>document.querySelector(sel);
 const app=$('#app-content');
@@ -342,16 +343,17 @@ function readBodyEstimateDraft(){
   heightCm:height,
   waistCm:number('waistCm'),
   neckCm:number('neckCm'),
-  weightKg:number('weightKg')
+  weightKg:number('weightKg'),
+  hipsCm:number('hipsCm')
  };
- return estimateBodyFatForAssessment(draft,db.measurements);
+ return estimateBodyFatForAssessment(draft,db.measurements,ESTIMATE_SEX);
 }
 function bodyFatLiveSummary(){
  return `<section class="body-fat-live" aria-live="polite" aria-label="Cálculo automático de gordura corporal">
   <div class="section-head"><h3 class="section-title">Estimativa automática com as medidas preenchidas</h3><span class="section-kicker">Atualização em tempo real · não precisa salvar</span></div>
   <div class="body-fat-live-grid">
    <div><small>RFM · altura e cintura</small><strong data-live-body-fat="rfm">—</strong></div>
-   <div><small>US Navy · altura, cintura e pescoço</small><strong data-live-body-fat="navy">—</strong></div>
+   <div><small>US Navy · ${ESTIMATE_SEX==='female'?'altura, cintura, quadril e pescoço':'altura, cintura e pescoço'}</small><strong data-live-body-fat="navy">—</strong></div>
    <div><small>Massa de gordura estimada · RFM + peso</small><strong data-live-body-fat="fatMassKg">—</strong></div>
    <div><small>Massa livre de gordura estimada · RFM + peso</small><strong data-live-body-fat="leanMassKg">—</strong></div>
   </div>
@@ -370,8 +372,8 @@ function updateBodyFatPreview(){
  }
  const status=root.querySelector?.('[data-live-body-fat-status]');
  if(status){
-  if(result.rfm===null)status.textContent='Para calcular o RFM, informe uma altura válida e a cintura na altura do umbigo. Não é necessário informar todas as circunferências.';
-  else if(result.navy===null)status.textContent='RFM calculado automaticamente. Para uma segunda estimativa, preencha também o pescoço; para estimar massa de gordura em kg, preencha o peso.';
+  if(result.rfm===null)status.textContent='Para calcular o RFM, informe altura, cintura e uma referência de sexo compatível com a fórmula. As demais medidas ficam disponíveis para acompanhamento.';
+  else if(result.navy===null)status.textContent='RFM calculado automaticamente. Para o US Navy, preencha pescoço'+(ESTIMATE_SEX==='female'?' e quadril':'')+'. Para estimar a massa de gordura em kg, informe o peso.';
   else status.textContent='RFM e US Navy calculados automaticamente pelas medidas informadas. São estimativas, não medições.';
   if(result.heightSource==='avaliação anterior')status.textContent+=' A altura utilizada veio de uma avaliação anterior.';
  }
@@ -381,15 +383,15 @@ function assessmentPage(){
  const previousHeight=compareMeasure(db.measurements,'heightCm').last;
  const bmi=calculateBMI(db.measurements);
  const latestChest=values.find(v=>typeof v.chestCm==='number'&&typeof v.chestExpandedCm==='number');
- const estimated=estimatesFor(db.measurements),expansion=latestChest?chestExcursion(latestChest):null;
- const fatTrend=estimatedBodyFatSeries(db.measurements,'rfm');
+ const estimated=estimatesFor(db.measurements,ESTIMATE_SEX),expansion=latestChest?chestExcursion(latestChest):null;
+ const fatTrend=estimatedBodyFatSeries(db.measurements,'rfm',ESTIMATE_SEX);
  const latestFatDate=fatTrend.at(-1)?.date||null;
  const lastMeasured=compareMeasure(db.measurements,'bodyFatPct').last;
  return `${header('ACOMPANHAMENTO CORPORAL','Avaliação corporal','Avalie medidas dos dois lados, evolução e fotografias privadas. Use sempre o mesmo método e horário aproximado.')}
  <div class="grid4">${bodyComparison('weightKg','Peso','kg')}${bodyComparison('waistCm','Cintura','cm')}${bodyComparison('chestCm','Tórax em repouso','cm')}${bodyComparison('chestExpandedCm','Tórax expandido','cm')}</div>
  <div class="body-assessment-note">IMC calculado: <strong>${bmi===null?'—':String(bmi).replace('.',',')}</strong> · Amplitude inspiratória (repouso → inspiração máxima): <strong>${expansion===null?'—':expansion.toLocaleString('pt-BR')+' cm'}</strong>. O IMC não indica diretamente gordura corporal. A amplitude não substitui avaliação clínica de expansibilidade torácica.</div>
  <section class="panel section body-fat-panel"><div class="section-head"><h3 class="section-title">Gordura corporal — estimativas por medidas</h3><span class="section-kicker">Sem necessidade de balança de bioimpedância</span></div>
- <div class="grid3 body-fat-results"><div><small>RFM · última avaliação calculável${latestFatDate?' ('+fmtDate(latestFatDate)+')':''}</small><strong>${estimated.rfm===null?'—':estimated.rfm.toLocaleString('pt-BR')+'%'}</strong></div><div><small>Método US Navy · altura + cintura + pescoço</small><strong>${estimated.navy===null?'—':estimated.navy.toLocaleString('pt-BR')+'%'}</strong></div><div><small>Percentual informado por exame</small><strong>${lastMeasured===null?'—':lastMeasured.toLocaleString('pt-BR')+'%'}</strong></div></div>
+ <div class="grid3 body-fat-results"><div><small>RFM · última avaliação calculável${latestFatDate?' ('+fmtDate(latestFatDate)+')':''}</small><strong>${estimated.rfm===null?'—':estimated.rfm.toLocaleString('pt-BR')+'%'}</strong></div><div><small>Método US Navy · medidas de circunferência correspondentes à fórmula</small><strong>${estimated.navy===null?'—':estimated.navy.toLocaleString('pt-BR')+'%'}</strong></div><div><small>Percentual informado por exame</small><strong>${lastMeasured===null?'—':lastMeasured.toLocaleString('pt-BR')+'%'}</strong></div></div>
  <p class="disclaimer">RFM e US Navy são <strong>estimativas estatísticas</strong>, não medidas reais. Não calculamos gordura usando fotografias nem o IMC isoladamente. Para acompanhamento, repita as medidas no mesmo ponto e, quando possível, valide a estimativa com um profissional. O valor de exame é registrado separadamente, nunca preenchido automaticamente.</p></section>
  <section class="panel section"><div class="section-head"><h3 class="section-title">Nova avaliação</h3><span class="section-kicker">Peso em kg · demais medidas em cm</span></div>
  <div class="body-guidance">Na altura, digite <strong>173 cm</strong> ou <strong>1,73 m</strong>; o sistema converte para centímetros. Peso como <strong>83,300 kg</strong> também é aceito. Para comparar tórax, posicione a fita na mesma altura em repouso e na inspiração máxima.</div>
@@ -406,7 +408,7 @@ function assessmentPage(){
  ${measurementPairRow('Braço','armRightCm','armLeftCm')}${measurementPairRow('Comprimento da perna','legRightCm','legLeftCm')}${measurementPairRow('Coxa','thighRightCm','thighLeftCm')}${measurementPairRow('Panturrilha','calfRightCm','calfLeftCm')}</tbody></table></div></section>
  <div class="section grid2">${bodyTrend('weightKg','Evolução do peso','kg')}${bodyTrend('waistCm','Evolução da cintura','cm')}${bodyTrend('rfmPct','Evolução da estimativa RFM','%',fatTrend)}</div>
  <section class="section"><div class="section-head"><h3 class="section-title">Histórico de avaliações e fotos</h3><span class="section-kicker">${values.length} registro(s)</span></div>
- ${values.length?`<div class="history-list">${values.map(x=>`<div class="body-history-card"><div class="history-entry body-record"><div><span class="active-label">AVALIAÇÃO · ${fmtDate(x.date)}</span><h3>${BODY_FIELDS.filter(f=>typeof x[f.key]==='number').map(f=>`${escapeHTML(f.label)}: ${x[f.key].toLocaleString('pt-BR')} ${f.unit}`).join(' · ')}</h3><p class="body-record-fat">${(()=>{const result=estimateBodyFatForAssessment(x,db.measurements);return result.rfm!==null?'RFM estimado: '+result.rfm.toLocaleString('pt-BR')+'% · US Navy: '+(result.navy===null?'aguardando medida do pescoço':result.navy.toLocaleString('pt-BR')+'%'):'Sem cálculo de gordura: falta altura ou cintura nesta avaliação.'})()}</p>${x.notes?`<p>${escapeHTML(x.notes)}</p>`:''}</div><div class="body-history-actions"><button class="button small outline" data-action="edit-assessment-photos" data-id="${escapeHTML(x.id)}">Gerenciar fotos</button><button class="button small danger icon-btn" title="Excluir avaliação" aria-label="Excluir avaliação" data-action="delete-assessment" data-id="${escapeHTML(x.id)}">${ico('trash',14)}</button></div></div>${photoGallery(x.id)}${photoEditId===x.id?photoEditor(x.id):''}</div>`).join('')}</div>`:`<div class="empty"><h3>Nenhuma avaliação registrada ainda.</h3><p>Preencha as medidas acima para estabelecer sua primeira referência.</p></div>`}
+ ${values.length?`<div class="history-list">${values.map(x=>`<div class="body-history-card"><div class="history-entry body-record"><div><span class="active-label">AVALIAÇÃO · ${fmtDate(x.date)}</span><h3>${BODY_FIELDS.filter(f=>typeof x[f.key]==='number').map(f=>`${escapeHTML(f.label)}: ${x[f.key].toLocaleString('pt-BR')} ${f.unit}`).join(' · ')}</h3><p class="body-record-fat">${(()=>{const result=estimateBodyFatForAssessment(x,db.measurements,ESTIMATE_SEX);return result.rfm!==null?'RFM estimado: '+result.rfm.toLocaleString('pt-BR')+'% · US Navy: '+(result.navy===null?'aguardando medida do pescoço':result.navy.toLocaleString('pt-BR')+'%'):'Sem cálculo de gordura: falta altura ou cintura nesta avaliação.'})()}</p>${x.notes?`<p>${escapeHTML(x.notes)}</p>`:''}</div><div class="body-history-actions"><button class="button small outline" data-action="edit-assessment-photos" data-id="${escapeHTML(x.id)}">Gerenciar fotos</button><button class="button small danger icon-btn" title="Excluir avaliação" aria-label="Excluir avaliação" data-action="delete-assessment" data-id="${escapeHTML(x.id)}">${ico('trash',14)}</button></div></div>${photoGallery(x.id)}${photoEditId===x.id?photoEditor(x.id):''}</div>`).join('')}</div>`:`<div class="empty"><h3>Nenhuma avaliação registrada ainda.</h3><p>Preencha as medidas acima para estabelecer sua primeira referência.</p></div>`}
  </section>`;
 }
 function saveAssessment(){
@@ -580,10 +582,10 @@ if(a==='delete-assessment'){if(confirm('Excluir esta avaliação corporal e suas
 }return}if(a==='view-activities'){go('atividades');return}if(a==='save-activity'){saveActivity();return}if(a==='delete-activity'){if(confirm('Excluir este registro de atividade?')){db.deleted.activities=[...new Set([...db.deleted.activities,btn.dataset.id])];db.activities=db.activities.filter(x=>x.id!==btn.dataset.id);save();render();toast('Atividade excluída.')}return}if(a==='mark-past-week'){saveManualEntries(getMissingScheduledSessions(PROGRAM,db.sessions,todayISO()));return}if(a==='mark-past-day'){const item=getMissingScheduledSessions(PROGRAM,db.sessions,todayISO()).find(e=>e.dayId===btn.dataset.day&&e.date===btn.dataset.date);if(item)saveManualEntries([item]);return}if(a==='apply-history-link'){const entries=parseCompletionHash(location.hash,PROGRAM,todayISO());if(!entries.length){toast('O link de registro não é válido.');return}const result=mergeCompletedSessions(db.sessions,entries,db.profile.startDate);db.sessions=result.sessions;save();go('evolucao');toast(result.added?`${result.added} treino(s) concluído(s) registrado(s).`:'Os treinos já estavam registrados.');return}if(a==='cancel-history-link'){go('dashboard');return}if(a==='choose-day'){selectedDay=btn.dataset.day;go('treinos');return}if(a==='view-plans'){go('treinos');return}if(a==='start'){startSession(btn.dataset.day);return}if(a==='resume'){go('sessao');return}if(a==='set-done'){toggleSet(btn.dataset.exid,btn.dataset.index,btn);return}if(a==='timer'){startTimer(btn.dataset.rest,btn.dataset.ex);return}if(a==='stop-timer'){timerEnd=0;updateTimer();return}if(a==='discard'){if(db.active&&confirm('Descartar a sessão em andamento? Séries não finalizadas serão perdidas.')){db.active=null;save();timerEnd=0;go('treinos');}return}if(a==='finish'){finish();return}if(a==='expand'){expandedSession=expandedSession===btn.dataset.id?null:btn.dataset.id;render();return}if(a==='delete-session'){if(confirm('Excluir este registro de treino?')){db.deleted.sessions=[...new Set([...db.deleted.sessions,btn.dataset.id])];db.sessions=db.sessions.filter(s=>s.id!==btn.dataset.id);save();render();toast('Registro excluído.')}return}if(a==='save-settings'){const v=$('#cycle-start')?.value;if(!v||!/^\d{4}-\d{2}-\d{2}$/.test(v)){toast('Informe uma data válida.');return}db.profile.startDate=v;save();render();toast('Data inicial atualizada.');return}if(a==='export-json'){exportJSON();return}if(a==='export-csv'){exportCSV();return}if(a==='import-merge'){pendingImportMode='merge';$('#import-file').click();return}if(a==='import-json'){pendingImportMode='replace';$('#import-file').click();return}if(a==='reset'){if(confirm('Apagar TODOS os seus dados de treino deste navegador? Esta operação não pode ser desfeita sem backup.')){db=initialData();selectedDay='A';expandedSession=null;timerEnd=0;save();go('dashboard');clearAllAssessmentPhotos().catch(()=>{});toast('Dados locais restaurados, incluindo o histórico de fotos quando disponível.')}return}}
 app.addEventListener('click',delegatedClick);
 $('#timer').addEventListener('click',delegatedClick);
-app.addEventListener('input',e=>{if(['body-heightCm','body-waistCm','body-neckCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();if(e.target.matches('[data-edit]')){persistEdit(e.target);const container=e.target.closest?.('.session-exercise');const feedback=container?.querySelector?.('[data-set-feedback]');if(feedback)feedback.hidden=true;e.target.closest?.('tr')?.classList?.remove('set-invalid');}});
+app.addEventListener('input',e=>{if(['body-heightCm','body-waistCm','body-neckCm','body-hipsCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();if(e.target.matches('[data-edit]')){persistEdit(e.target);const container=e.target.closest?.('.session-exercise');const feedback=container?.querySelector?.('[data-set-feedback]');if(feedback)feedback.hidden=true;e.target.closest?.('tr')?.classList?.remove('set-invalid');}});
 app.addEventListener('change',e=>{
  if(e.target.matches('[data-edit]'))persistEdit(e.target);
- if(['body-heightCm','body-waistCm','body-neckCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();
+ if(['body-heightCm','body-waistCm','body-neckCm','body-hipsCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();
  if(e.target.dataset?.photoInput){
   const file=e.target.files?.[0];
   const preview=e.target.closest?.('.body-photo-slot')?.querySelector?.('.body-photo-preview');
