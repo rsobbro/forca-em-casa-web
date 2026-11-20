@@ -81,7 +81,7 @@ export function describeGoogleOAuthFailure(code=''){
   invalid_client:'O Google não reconheceu o Client ID OAuth; confira a credencial Web application.',
   interaction_required:'É necessário interagir com a tela de consentimento do Google.'
  };
- return explanations[safe]||'O Google não concluiu a autenticação'+(safe?' (código '+safe+')':'')+'. Feche a aba de erro e tente novamente a partir do endereço do Força em Casa.';
+ return explanations[safe]||'O Google não concluiu a autenticação. Feche somente a guia de erro e tente novamente a partir do endereço do Força em Casa. Se persistir, verifique o aplicativo OAuth no Google Cloud.';
 }
 /** Login: solicita somente dados básicos, nunca acesso ao Drive. */
 export function authorizeIdentity(clientId,googleApi=globalThis.google,fetchImpl=globalThis.fetch){
