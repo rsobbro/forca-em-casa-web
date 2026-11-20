@@ -132,7 +132,7 @@ export function authorizeDrive(clientId,googleApi=globalThis.google,loginHint=''
     client_id:clientId,scope:GOOGLE_AUTH_SCOPES,
     // Hint provided by the previously verified Google login to avoid selecting
     // an unrelated account when authorizing Drive on mobile.
-    ...(typeof loginHint==='string'&&/^[^\\s@]+@gmail\\.com$/i.test(loginHint)?{login_hint:loginHint}:{}),
+    ...(typeof loginHint==='string'&&/^[^\s@]+@gmail\.com$/i.test(loginHint)?{login_hint:loginHint}:{}),
     // Previously granted access is reused. Google shows consent if a new scope
     // (drive.file) is requested; never force another consent on every retry.
     prompt:'',
