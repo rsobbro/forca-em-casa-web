@@ -68,6 +68,21 @@ export function normalizeCloudData(data){
   sessions:data.sessions,activities:data.activities,measurements:data.measurements,active:data.active||null,
   deleted:normalizeDeleted(data.deleted)};
 }
+/** Mensagens de OAuth sem incluir tokens ou informações da URL de consentimento. */
+export function describeGoogleOAuthFailure(code=''){
+ const safe=String(code||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60);
+ const explanations={
+  popup_failed_to_open:'O navegador impediu a abertura da janela do Google. Autorize pop-ups para este site e tente novamente no Chrome.',
+  popup_closed:'A janela do Google foi fechada antes de concluir o acesso. Retorne ao Força em Casa e use o botão novamente.',
+  access_denied:'O Google não autorizou o acesso. Confirme o Gmail na lista de usuários de teste e as permissões solicitadas.',
+  origin_mismatch:'A origem do site não está autorizada no projeto OAuth. Cadastre https://rsobbro.github.io em Authorized JavaScript origins.',
+  redirect_uri_mismatch:'O cliente OAuth tem uma configuração de redirecionamento incompatível com o aplicativo.',
+  invalid_request:'O Google rejeitou a solicitação OAuth. Confira o tipo Web application, as origens autorizadas e o Client ID.',
+  invalid_client:'O Google não reconheceu o Client ID OAuth; confira a credencial Web application.',
+  interaction_required:'É necessário interagir com a tela de consentimento do Google.'
+ };
+ return explanations[safe]||'O Google não concluiu a autenticação'+(safe?' (código '+safe+')':'')+'. Feche a aba de erro e tente novamente a partir do endereço do Força em Casa.';
+}
 /** Login: solicita somente dados básicos, nunca acesso ao Drive. */
 export function authorizeIdentity(clientId,googleApi=globalThis.google,fetchImpl=globalThis.fetch){
  if(!googleClientIdConfigured(clientId))return Promise.reject(new Error('Client ID OAuth não configurado.'));
@@ -84,7 +99,7 @@ export function authorizeIdentity(clientId,googleApi=globalThis.google,fetchImpl
    const client=googleApi.accounts.oauth2.initTokenClient({
     client_id:clientId,scope:GOOGLE_LOGIN_SCOPES,
     callback:async response=>{
-     if(response?.error||!response?.access_token){done(new Error('Login Google não autorizado.'));return;}
+     if(response?.error||!response?.access_token){done(new Error(describeGoogleOAuthFailure(response?.error)));return;}
      try{
       const reply=await fetchImpl('https://www.googleapis.com/oauth2/v3/userinfo',{
        headers:{Authorization:'Bearer '+response.access_token},cache:'no-store'
@@ -97,14 +112,14 @@ export function authorizeIdentity(clientId,googleApi=globalThis.google,fetchImpl
        name:String(identity.name||'')},accessToken:response.access_token});
      }catch(error){done(error);}
     },
-    error_callback:()=>done(new Error('Janela de login Google fechada ou bloqueada.'))
+    error_callback:result=>done(new Error(describeGoogleOAuthFailure(result?.type)))
    });
    client.requestAccessToken({prompt:'select_account'});
   }catch(error){done(error)}
  });
 }
 /** Permissão adicional: somente quando o usuário solicitar salvar no Drive. */
-export function authorizeDrive(clientId,googleApi=globalThis.google){
+export function authorizeDrive(clientId,googleApi=globalThis.google,loginHint=''){
  if(!googleClientIdConfigured(clientId))return Promise.reject(new Error('Google OAuth Client ID ainda não foi configurado.'));
  const oauth=googleApi?.accounts?.oauth2;
  if(!oauth?.initTokenClient)return Promise.reject(new Error('Biblioteca de autenticação Google não carregada. Atualize a página.'));
@@ -115,15 +130,21 @@ export function authorizeDrive(clientId,googleApi=globalThis.google){
   try{
    const client=oauth.initTokenClient({
     client_id:clientId,scope:GOOGLE_AUTH_SCOPES,
+    // Hint provided by the previously verified Google login to avoid selecting
+    // an unrelated account when authorizing Drive on mobile.
+    ...(typeof loginHint==='string'&&/^[^\\s@]+@gmail\\.com$/i.test(loginHint)?{login_hint:loginHint}:{}),
+    // Previously granted access is reused. Google shows consent if a new scope
+    // (drive.file) is requested; never force another consent on every retry.
+    prompt:'',
     callback:response=>{
-     if(response?.error||!response?.access_token){fail('A autorização Google foi recusada ou expirou.');return}
+     if(response?.error||!response?.access_token){fail(describeGoogleOAuthFailure(response?.error));return}
      if(!String(response.scope||'').split(/\s+/).includes(GOOGLE_DRIVE_SCOPE)){fail('A permissão para criar arquivos no Google Drive não foi concedida.');return}
      succeed(response.access_token);
     },
-    error_callback:()=>fail('A janela de autorização foi fechada ou bloqueada.')
+    error_callback:result=>fail(describeGoogleOAuthFailure(result?.type))
    });
    // Always invoked from a user click; no token is persisted.
-   client.requestAccessToken({prompt:'consent'});
+   client.requestAccessToken();
   }catch{fail('Não foi possível abrir a autorização do Google.')}
  });
 }
