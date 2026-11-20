@@ -86,7 +86,7 @@ export class GoogleDriveController {
  async connect(){
   if(!this.authenticated)throw new Error('Primeiro faça login com seu Gmail.');
   // MUST be called directly from a real user click; no awaits before popup.
-  const token=await authorizeDrive(this.clientId,this.googleApi||globalThis.google);
+  const token=await authorizeDrive(this.clientId,this.googleApi||globalThis.google,this.identity.email);
   const client=createGoogleDriveClient(token,{fetchImpl:this.fetchImpl});
   const user=await client.about();
   if(!validGoogleIdentity(user)||user.sub!==this.identity.sub||
