@@ -1,4 +1,8 @@
 import {PROGRAM,prescribedSets,findDay} from './plan.js';
+import {GOOGLE_OAUTH_CLIENT_ID} from './google-config.js';
+import {getAge} from './registration.js';
+import {googleClientIdConfigured,normalizeDeleted} from './google-drive-sync.js';
+import {GoogleDriveController} from './google-drive-controller.js';
 import {weeklyProgress,totalProgress,mergeHistory} from './progress.js';
 import {EQUIPMENT,INVENTORY_NOTICE,validateProgramEquipment} from './equipment-audit.js';
 import {exerciseVideo} from './exercise-videos.js';
@@ -8,7 +12,9 @@ import {getExerciseMedia,PHOTO_SOURCE} from './exercise-media.js';
 import {ACTIVITY_TYPES,ACTIVITY_INTENSITIES,activityType,validActivity,validISO,activitySummary} from './activities.js';
 import {parseCompletionHash,mergeCompletedSessions,getMissingScheduledSessions} from './completion-import.js';
 
-const STORAGE_KEY='forca-em-casa-v1';
+const AUTH_CONTEXT=globalThis.__FORCA_AUTH_CONTEXT||null;
+const ESTIMATE_SEX=AUTH_CONTEXT?.profile?.sex==='feminino'?'female':AUTH_CONTEXT?.profile?.sex==='masculino'?'male':AUTH_CONTEXT?null:'male';
+const STORAGE_KEY=AUTH_CONTEXT?.cacheKey||'forca-em-casa-v1';
 const $=sel=>document.querySelector(sel);
 const app=$('#app-content');
 const icons={
@@ -46,10 +52,102 @@ const nowWeekDay=()=>new Date().getDay();
 const startOfWeek=(date=new Date())=>{const d=new Date(date.getFullYear(),date.getMonth(),date.getDate(),12);d.setDate(d.getDate() - (d.getDay()===0?6:d.getDay()-1));return d;};
 const daysDiff=(a,b)=>Math.round((dateAtLocal(a)-dateAtLocal(b))/(1000*60*60*24));
 const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
-const initialData=()=>({version:1,profile:{startDate:todayISO()},sessions:[],activities:[],measurements:[],active:null});
-function loadDB(){try{const d=JSON.parse(localStorage.getItem(STORAGE_KEY));if(d&&d.version===1&&Array.isArray(d.sessions)&&d.profile&&typeof d.profile.startDate==='string'){return {version:1,profile:{startDate:d.profile.startDate},sessions:d.sessions,activities:Array.isArray(d.activities)?d.activities.filter(validActivity):[],measurements:Array.isArray(d.measurements)?d.measurements.filter(validBodyMeasurement):[],active:d.active||null}}}catch{}return initialData()}
+const initialData=()=>({version:1,profile:{startDate:todayISO()},sessions:[],activities:[],measurements:[],active:null,deleted:{sessions:[],activities:[],measurements:[]}});
+function loadDB(){try{const d=JSON.parse(localStorage.getItem(STORAGE_KEY));if(d&&d.version===1&&Array.isArray(d.sessions)&&d.profile&&typeof d.profile.startDate==='string'){return {version:1,profile:{startDate:d.profile.startDate},sessions:d.sessions,activities:Array.isArray(d.activities)?d.activities.filter(validActivity):[],measurements:Array.isArray(d.measurements)?d.measurements.filter(validBodyMeasurement):[],active:d.active||null,deleted:normalizeDeleted(d.deleted)}}}catch{}return initialData()}
 let db=loadDB();
-function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(db))}catch{toast('Não foi possível salvar. Verifique o espaço ou o modo privado do navegador.')}}
+let cloudState=AUTH_CONTEXT?.controller?.connected?'sincronizado':'desconectado';
+let cloudError='';
+let cloudTimer=null;
+let cloudBusy=false;
+let drivePromptVisible=false;
+let assessmentPhotoWrite=Promise.resolve();
+let cloudPending=localStorage.getItem(STORAGE_KEY+'-drive-pending')==='1';
+function markCloudPending(){cloudPending=true;localStorage.setItem(STORAGE_KEY+'-drive-pending','1')}
+function markCloudSaved(){cloudPending=false;drivePromptVisible=false;localStorage.removeItem(STORAGE_KEY+'-drive-pending')}
+
+const cloud=AUTH_CONTEXT?.controller||new GoogleDriveController({clientId:GOOGLE_OAUTH_CLIENT_ID});
+function scheduleCloudSync(){
+ if(!cloud.connected||cloudBusy)return;
+ if(cloudTimer)clearTimeout(cloudTimer);
+ cloudTimer=setTimeout(()=>{cloudTimer=null;syncCloud(true)},18000);
+}
+function refreshCloudSyncView(){
+ const route=getRoute();
+ if(route==='avaliacao'){
+  // Reescreve apenas o aviso do Drive: nunca destrói o formulário em edição.
+  const banner=app.querySelector?.('.cloud-assessment-banner');
+  if(banner)banner.outerHTML=driveAssessmentConsentPanel();
+ }else if(route==='configuracoes'||route==='evolucao')render();
+}
+async function syncCloud(silent=false){
+ if(!cloud.connected||cloudBusy)return;
+ cloudBusy=true;
+ if(cloudTimer){clearTimeout(cloudTimer);cloudTimer=null}
+ cloudState='sincronizando';
+ try{
+  const result=await cloud.sync(db);
+  db=result.db;
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(db));
+  if(result.photos.conflicts){
+   cloudState='conflito';markCloudPending();
+   cloudError=result.photos.conflicts+' fotografia(s) têm versões diferentes no Drive. Nenhuma foi sobrescrita. Os dados estruturados foram enviados, mas as fotos precisam de resolução.';
+   if(!silent)toast('Histórico enviado, porém há conflito entre fotografias.');
+  }else{
+   cloudState='sincronizado';markCloudSaved();cloudError='';
+   if(!silent)toast('Histórico e fotografias confirmados pelo Google Drive.');
+  }
+ }catch(err){
+  cloudState='erro';
+  cloudError=err instanceof Error?err.message:String(err);
+  markCloudPending();
+  // Uma falha não apaga o cache nem confirma gravação em nuvem.
+  if(!silent)toast('Sincronização pendente. Consulte o diagnóstico na área de Avaliação ou Configurações.');
+ }finally{
+  cloudBusy=false;
+  // Rerender after unlocking. Otherwise the "Sincronizar agora" button stays
+  // visually disabled because it was rendered while cloudBusy=true.
+  refreshCloudSyncView();
+ }
+}
+async function connectCloud(){
+ if(!googleClientIdConfigured(GOOGLE_OAUTH_CLIENT_ID)){
+  toast('Falta configurar o Client ID OAuth do Google Cloud.');return;
+ }
+ if(cloudBusy)return;
+ // Esta função somente é chamada diretamente pelo clique explícito do usuário.
+ // A abertura do popup OAuth acontece dentro de cloud.connect(), sem await prévio.
+ cloudBusy=true;cloudState='solicitando autorização';cloudError='';
+ try{
+  const {user}=await cloud.connect();
+  if(AUTH_CONTEXT&&user.sub!==AUTH_CONTEXT.user.sub)throw new Error('A conta do Drive é diferente da conta Gmail do login.');
+  const profile=await cloud.loadProfile();
+  if(!profile&&AUTH_CONTEXT?.profile)await cloud.saveProfile(AUTH_CONTEXT.profile);
+  else if(profile&&AUTH_CONTEXT?.profile&&profile.googleSub!==AUTH_CONTEXT.profile.googleSub)
+   throw new Error('O cadastro do Google Drive pertence a outra pessoa.');
+  cloudState='autorizado';
+  await assessmentPhotoWrite; // aguardar gravação local das fotos
+ }catch(err){
+  cloudState='erro';cloudError=err.message;
+  toast('Drive não autorizado. Sua avaliação está salva somente neste dispositivo: '+err.message);
+  cloudBusy=false;
+  if(['configuracoes','avaliacao'].includes(getRoute()))render();
+  return;
+ }
+ cloudBusy=false;
+ await syncCloud(false);
+}
+function disconnectCloud(){
+ if(cloudTimer)clearTimeout(cloudTimer);
+ cloudTimer=null;
+ if(AUTH_CONTEXT&&globalThis.__FORCA_AUTH_LOGOUT){
+  if(confirm('Sair da conta Google? Os dados salvos em seu Drive permanecem disponíveis no próximo login.'))globalThis.__FORCA_AUTH_LOGOUT();
+  return;
+ }
+ cloud.disconnect();cloudState='desconectado';cloudError='';
+ toast('Google Drive desconectado. Dados locais preservados.');
+ if(getRoute()==='configuracoes')render();
+}
+function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(db));scheduleCloudSync()}catch{toast('Não foi possível salvar. Verifique o espaço ou o modo privado do navegador.')}}
 let selectedDay='A';
 let expandedSession=null;
 let pendingImportMode='replace';
@@ -279,16 +377,17 @@ function readBodyEstimateDraft(){
   heightCm:height,
   waistCm:number('waistCm'),
   neckCm:number('neckCm'),
-  weightKg:number('weightKg')
+  weightKg:number('weightKg'),
+  hipsCm:number('hipsCm')
  };
- return estimateBodyFatForAssessment(draft,db.measurements);
+ return estimateBodyFatForAssessment(draft,db.measurements,ESTIMATE_SEX);
 }
 function bodyFatLiveSummary(){
  return `<section class="body-fat-live" aria-live="polite" aria-label="Cálculo automático de gordura corporal">
   <div class="section-head"><h3 class="section-title">Estimativa automática com as medidas preenchidas</h3><span class="section-kicker">Atualização em tempo real · não precisa salvar</span></div>
   <div class="body-fat-live-grid">
    <div><small>RFM · altura e cintura</small><strong data-live-body-fat="rfm">—</strong></div>
-   <div><small>US Navy · altura, cintura e pescoço</small><strong data-live-body-fat="navy">—</strong></div>
+   <div><small>US Navy · ${ESTIMATE_SEX==='female'?'altura, cintura, quadril e pescoço':'altura, cintura e pescoço'}</small><strong data-live-body-fat="navy">—</strong></div>
    <div><small>Massa de gordura estimada · RFM + peso</small><strong data-live-body-fat="fatMassKg">—</strong></div>
    <div><small>Massa livre de gordura estimada · RFM + peso</small><strong data-live-body-fat="leanMassKg">—</strong></div>
   </div>
@@ -307,26 +406,48 @@ function updateBodyFatPreview(){
  }
  const status=root.querySelector?.('[data-live-body-fat-status]');
  if(status){
-  if(result.rfm===null)status.textContent='Para calcular o RFM, informe uma altura válida e a cintura na altura do umbigo. Não é necessário informar todas as circunferências.';
-  else if(result.navy===null)status.textContent='RFM calculado automaticamente. Para uma segunda estimativa, preencha também o pescoço; para estimar massa de gordura em kg, preencha o peso.';
+  if(result.rfm===null)status.textContent='Para calcular o RFM, informe altura, cintura e uma referência de sexo compatível com a fórmula. As demais medidas ficam disponíveis para acompanhamento.';
+  else if(result.navy===null)status.textContent='RFM calculado automaticamente. Para o US Navy, preencha pescoço'+(ESTIMATE_SEX==='female'?' e quadril':'')+'. Para estimar a massa de gordura em kg, informe o peso.';
   else status.textContent='RFM e US Navy calculados automaticamente pelas medidas informadas. São estimativas, não medições.';
   if(result.heightSource==='avaliação anterior')status.textContent+=' A altura utilizada veio de uma avaliação anterior.';
  }
+}
+function driveAssessmentConsentPanel(){
+ if(cloud.connected){
+  return `<section class="panel cloud-assessment-banner"><strong>${cloudPending?'Envio ao Google Drive pendente':'Google Drive autorizado'}</strong>
+   <p>${cloudPending?'Seus dados estão neste dispositivo e ainda não têm confirmação de envio.':'Sua conta Gmail autorizou a gravação nos arquivos do Força em Casa.'}</p>
+   ${cloudError?'<small>Diagnóstico de sincronização — os dados locais continuam preservados:</small>':''}
+   <button class="button outline" data-action="drive-sync">Sincronizar agora</button>
+   ${cloudError?`<p role="alert" class="cloud-error">${escapeHTML(cloudError)}</p>`:''}</section>`;
+ }
+ if(!cloudPending){
+  return `<div class="body-guidance"><strong>Privacidade:</strong> seu Gmail é utilizado para acessar o sistema, mas ainda não temos permissão para salvar nada no Drive. Ao salvar a primeira avaliação, você poderá autorizar o envio.</div>`;
+ }
+ return `<section class="panel cloud-assessment-banner" role="region" aria-label="Autorizar salvamento no Google Drive">
+   <div class="section-head"><h3 class="section-title">Autorizar salvamento na sua conta Google Drive</h3><span class="section-kicker">Ação necessária</span></div>
+   <p>Esta avaliação está <strong>salva somente neste dispositivo</strong>. Para acessá-la em outros aparelhos, você deve autorizar o Força em Casa a criar e atualizar <strong>seus próprios arquivos</strong> nas pastas Dados e Fotos do seu Gmail.</p>
+   <p><strong>O sistema não terá acesso geral ao seu Drive.</strong> O Google mostrará a tela oficial de consentimento para a permissão <code>drive.file</code>. Você poderá recusar; nesse caso, nada será enviado e a avaliação permanecerá local.</p>
+   <div class="setting-actions">
+    <button class="button primary" data-action="drive-authorize-assessment" ${cloudBusy?'disabled':''}>Autorizar Google Drive e salvar</button>
+    ${drivePromptVisible?`<button class="button outline" data-action="drive-consent-later">Agora não — manter somente neste dispositivo</button>`:''}
+   </div>
+   ${cloudError?`<p class="cloud-error" role="alert">${escapeHTML(cloudError)}</p>`:''}
+   </section>`;
 }
 function assessmentPage(){
  const values=[...db.measurements].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
  const previousHeight=compareMeasure(db.measurements,'heightCm').last;
  const bmi=calculateBMI(db.measurements);
  const latestChest=values.find(v=>typeof v.chestCm==='number'&&typeof v.chestExpandedCm==='number');
- const estimated=estimatesFor(db.measurements),expansion=latestChest?chestExcursion(latestChest):null;
- const fatTrend=estimatedBodyFatSeries(db.measurements,'rfm');
+ const estimated=estimatesFor(db.measurements,ESTIMATE_SEX),expansion=latestChest?chestExcursion(latestChest):null;
+ const fatTrend=estimatedBodyFatSeries(db.measurements,'rfm',ESTIMATE_SEX);
  const latestFatDate=fatTrend.at(-1)?.date||null;
  const lastMeasured=compareMeasure(db.measurements,'bodyFatPct').last;
- return `${header('ACOMPANHAMENTO CORPORAL','Avaliação corporal','Avalie medidas dos dois lados, evolução e fotografias privadas. Use sempre o mesmo método e horário aproximado.')}
+ return `${header('ACOMPANHAMENTO CORPORAL','Avaliação corporal','Avalie medidas dos dois lados, evolução e fotografias privadas. Use sempre o mesmo método e horário aproximado.')}${driveAssessmentConsentPanel()}
  <div class="grid4">${bodyComparison('weightKg','Peso','kg')}${bodyComparison('waistCm','Cintura','cm')}${bodyComparison('chestCm','Tórax em repouso','cm')}${bodyComparison('chestExpandedCm','Tórax expandido','cm')}</div>
  <div class="body-assessment-note">IMC calculado: <strong>${bmi===null?'—':String(bmi).replace('.',',')}</strong> · Amplitude inspiratória (repouso → inspiração máxima): <strong>${expansion===null?'—':expansion.toLocaleString('pt-BR')+' cm'}</strong>. O IMC não indica diretamente gordura corporal. A amplitude não substitui avaliação clínica de expansibilidade torácica.</div>
  <section class="panel section body-fat-panel"><div class="section-head"><h3 class="section-title">Gordura corporal — estimativas por medidas</h3><span class="section-kicker">Sem necessidade de balança de bioimpedância</span></div>
- <div class="grid3 body-fat-results"><div><small>RFM · última avaliação calculável${latestFatDate?' ('+fmtDate(latestFatDate)+')':''}</small><strong>${estimated.rfm===null?'—':estimated.rfm.toLocaleString('pt-BR')+'%'}</strong></div><div><small>Método US Navy · altura + cintura + pescoço</small><strong>${estimated.navy===null?'—':estimated.navy.toLocaleString('pt-BR')+'%'}</strong></div><div><small>Percentual informado por exame</small><strong>${lastMeasured===null?'—':lastMeasured.toLocaleString('pt-BR')+'%'}</strong></div></div>
+ <div class="grid3 body-fat-results"><div><small>RFM · última avaliação calculável${latestFatDate?' ('+fmtDate(latestFatDate)+')':''}</small><strong>${estimated.rfm===null?'—':estimated.rfm.toLocaleString('pt-BR')+'%'}</strong></div><div><small>Método US Navy · medidas de circunferência correspondentes à fórmula</small><strong>${estimated.navy===null?'—':estimated.navy.toLocaleString('pt-BR')+'%'}</strong></div><div><small>Percentual informado por exame</small><strong>${lastMeasured===null?'—':lastMeasured.toLocaleString('pt-BR')+'%'}</strong></div></div>
  <p class="disclaimer">RFM e US Navy são <strong>estimativas estatísticas</strong>, não medidas reais. Não calculamos gordura usando fotografias nem o IMC isoladamente. Para acompanhamento, repita as medidas no mesmo ponto e, quando possível, valide a estimativa com um profissional. O valor de exame é registrado separadamente, nunca preenchido automaticamente.</p></section>
  <section class="panel section"><div class="section-head"><h3 class="section-title">Nova avaliação</h3><span class="section-kicker">Peso em kg · demais medidas em cm</span></div>
  <div class="body-guidance">Na altura, digite <strong>173 cm</strong> ou <strong>1,73 m</strong>; o sistema converte para centímetros. Peso como <strong>83,300 kg</strong> também é aceito. Para comparar tórax, posicione a fita na mesma altura em repouso e na inspiração máxima.</div>
@@ -343,7 +464,7 @@ function assessmentPage(){
  ${measurementPairRow('Braço','armRightCm','armLeftCm')}${measurementPairRow('Comprimento da perna','legRightCm','legLeftCm')}${measurementPairRow('Coxa','thighRightCm','thighLeftCm')}${measurementPairRow('Panturrilha','calfRightCm','calfLeftCm')}</tbody></table></div></section>
  <div class="section grid2">${bodyTrend('weightKg','Evolução do peso','kg')}${bodyTrend('waistCm','Evolução da cintura','cm')}${bodyTrend('rfmPct','Evolução da estimativa RFM','%',fatTrend)}</div>
  <section class="section"><div class="section-head"><h3 class="section-title">Histórico de avaliações e fotos</h3><span class="section-kicker">${values.length} registro(s)</span></div>
- ${values.length?`<div class="history-list">${values.map(x=>`<div class="body-history-card"><div class="history-entry body-record"><div><span class="active-label">AVALIAÇÃO · ${fmtDate(x.date)}</span><h3>${BODY_FIELDS.filter(f=>typeof x[f.key]==='number').map(f=>`${escapeHTML(f.label)}: ${x[f.key].toLocaleString('pt-BR')} ${f.unit}`).join(' · ')}</h3><p class="body-record-fat">${(()=>{const result=estimateBodyFatForAssessment(x,db.measurements);return result.rfm!==null?'RFM estimado: '+result.rfm.toLocaleString('pt-BR')+'% · US Navy: '+(result.navy===null?'aguardando medida do pescoço':result.navy.toLocaleString('pt-BR')+'%'):'Sem cálculo de gordura: falta altura ou cintura nesta avaliação.'})()}</p>${x.notes?`<p>${escapeHTML(x.notes)}</p>`:''}</div><div class="body-history-actions"><button class="button small outline" data-action="edit-assessment-photos" data-id="${escapeHTML(x.id)}">Gerenciar fotos</button><button class="button small danger icon-btn" title="Excluir avaliação" aria-label="Excluir avaliação" data-action="delete-assessment" data-id="${escapeHTML(x.id)}">${ico('trash',14)}</button></div></div>${photoGallery(x.id)}${photoEditId===x.id?photoEditor(x.id):''}</div>`).join('')}</div>`:`<div class="empty"><h3>Nenhuma avaliação registrada ainda.</h3><p>Preencha as medidas acima para estabelecer sua primeira referência.</p></div>`}
+ ${values.length?`<div class="history-list">${values.map(x=>`<div class="body-history-card"><div class="history-entry body-record"><div><span class="active-label">AVALIAÇÃO · ${fmtDate(x.date)}</span><h3>${BODY_FIELDS.filter(f=>typeof x[f.key]==='number').map(f=>`${escapeHTML(f.label)}: ${x[f.key].toLocaleString('pt-BR')} ${f.unit}`).join(' · ')}</h3><p class="body-record-fat">${(()=>{const result=estimateBodyFatForAssessment(x,db.measurements,ESTIMATE_SEX);return result.rfm!==null?'RFM estimado: '+result.rfm.toLocaleString('pt-BR')+'% · US Navy: '+(result.navy===null?'aguardando medida do pescoço':result.navy.toLocaleString('pt-BR')+'%'):'Sem cálculo de gordura: falta altura ou cintura nesta avaliação.'})()}</p>${x.notes?`<p>${escapeHTML(x.notes)}</p>`:''}</div><div class="body-history-actions"><button class="button small outline" data-action="edit-assessment-photos" data-id="${escapeHTML(x.id)}">Gerenciar fotos</button><button class="button small danger icon-btn" title="Excluir avaliação" aria-label="Excluir avaliação" data-action="delete-assessment" data-id="${escapeHTML(x.id)}">${ico('trash',14)}</button></div></div>${photoGallery(x.id)}${photoEditId===x.id?photoEditor(x.id):''}</div>`).join('')}</div>`:`<div class="empty"><h3>Nenhuma avaliação registrada ainda.</h3><p>Preencha as medidas acima para estabelecer sua primeira referência.</p></div>`}
  </section>`;
 }
 function saveAssessment(){
@@ -367,9 +488,15 @@ function saveAssessment(){
  if(!validBodyMeasurement(record)){toast('Informe peso ou pelo menos uma medida corporal.');return}
  if(db.measurements.some(x=>x.date===date)&&!confirm('Já existe avaliação nesta data. Deseja adicionar outra?'))return;
  db.measurements.push(record);save();go('avaliacao');
+ if(!cloud.connected){markCloudPending();drivePromptVisible=true;}
  if(Object.keys(photos).length){
-  saveAssessmentPhotos(id,photos).then(()=>{renderBodyPhotos();toast('Avaliação e fotos salvas neste navegador.')}).catch(err=>toast('Medidas salvas, mas fotos falharam: '+err.message));
- }else toast('Avaliação salva somente neste navegador.');
+  assessmentPhotoWrite=saveAssessmentPhotos(id,photos).then(()=>{
+   renderBodyPhotos();if(cloud.connected)scheduleCloudSync();
+  }).catch(err=>{toast('As medidas foram salvas, mas houve falha nas fotos: '+err.message)});
+ }else assessmentPhotoWrite=Promise.resolve();
+ if(!cloud.connected){render();toast('Avaliação salva localmente. Autorize o Drive para sincronizar.');}
+ else toast('Avaliação salva localmente. Enviando para o Drive autorizado...');
+
 }
 function saveEditedAssessmentPhotos(id){
  if(!db.measurements.some(x=>x.id===id)){toast('Avaliação não localizada.');return}
@@ -377,7 +504,7 @@ function saveEditedAssessmentPhotos(id){
  if(!files)return;
  if(!Object.keys(files).length){toast('Selecione ao menos uma foto para salvar.');return}
  saveAssessmentPhotos(id,files).then(()=>{
-  photoEditId=null;render();toast('Fotos desta avaliação atualizadas.');
+  photoEditId=null;if(!cloud.connected){markCloudPending();drivePromptVisible=true;}render();if(cloud.connected)scheduleCloudSync();toast(cloud.connected?'Fotos salvas localmente; sincronização iniciada.':'Fotos locais salvas; autorize o Drive para sincronizar.');
  }).catch(err=>toast('Não foi possível salvar as fotos: '+err.message));
 }
 function exportAssessmentCSV(){
@@ -386,12 +513,38 @@ function exportAssessmentCSV(){
  download('\ufeff'+rows.map(row=>row.map(csvEsc).join(';')).join('\r\n'),`forca-em-casa-avaliacoes-${todayISO()}.csv`,'text/csv;charset=utf-8');
  toast('Avaliações exportadas em CSV.');
 }
+function cloudSettingsPanel(){
+ const enabled=googleClientIdConfigured(GOOGLE_OAUTH_CLIENT_ID);
+ const connected=cloud.connected;
+ const account=connected?cloud.user?.emailAddress:'';
+ const folders=connected?cloud.folders:null;
+ const person=AUTH_CONTEXT?.profile;
+ const years=person?.birthDate?getAge(person.birthDate):null;
+ return `<section class="setting-card cloud-settings" aria-label="Sincronização Google Drive">
+  <div class="active-label">05 · CONTA E NUVEM</div>
+  <h3 style="margin-top:12px">Conta pessoal e Google Drive</h3>
+  ${person?`<div class="cloud-identity"><strong>${escapeHTML(person.name)}</strong><small>Gmail: ${escapeHTML(person.email)} · Idade: ${years??'—'} · Sexo: ${person.sex==='masculino'?'Masculino':person.sex==='feminino'?'Feminino':'Prefiro não informar'}</small></div>`:''}
+  <p>Seu Gmail confirma a identidade, mas <strong>não autoriza o Google Drive automaticamente</strong>. Ao salvar uma avaliação, você decide se permite criar e atualizar arquivos em <strong>Força em Casa / Dados</strong> e <strong>Força em Casa / Fotos</strong>.</p>
+  ${enabled?
+   `<div class="cloud-identity"><strong>${connected?'Conectado: '+escapeHTML(account):'Gmail autenticado · Drive ainda não autorizado'}</strong><small>Estado: ${escapeHTML(cloudState)}${cloud.lastSync?' · Última sincronização: '+new Date(cloud.lastSync).toLocaleString('pt-BR'):''}</small></div>
+   <div class="setting-actions">
+    <button class="button primary" data-action="drive-connect" ${cloudBusy||connected?'disabled':''}>${ico('cloud',16)} ${connected?'Drive autorizado':'Autorizar Google Drive'}</button>
+    ${connected?`<button class="button outline" data-action="drive-sync" ${cloudBusy?'disabled':''}>${ico('check',16)} Sincronizar agora</button><button class="button outline" data-action="drive-disconnect">Sair da conta</button>`:''}
+   </div>
+   ${folders?`<small>Pastas privadas criadas/identificadas no Drive desta conta.</small>`:''}
+   `:
+   `<p><strong>Integração preparada, aguardando OAuth Client ID.</strong> O administrador deve ativar a Drive API e configurar o Client ID público em <code>google-config.js</code>. Até lá, seus registros continuam apenas neste navegador.</p>
+   <a href="https://github.com/rsobbro/forca-em-casa-web/blob/feature/google-drive-sync/docs/GOOGLE_DRIVE.md" target="_blank" rel="noopener noreferrer">Manual de ativação Google Cloud</a>`}
+  ${cloudError?`<p class="cloud-error" role="alert">${escapeHTML(cloudError)}</p>`:''}
+  <p class="disclaimer">Segurança: OAuth temporário, sem guardar senhas ou tokens. Uma conta Google diferente neste navegador é bloqueada para evitar vazamento de históricos. Sincronização automática ocorre somente enquanto a conta está conectada e com internet. Alterações conflitantes não são sobrescritas automaticamente.</p>
+ </section>`;
+}
 function configuracoes(){return `${header('PREFERÊNCIAS','Configurações','Personalize o início do ciclo e gerencie seus registros com segurança.')}
 <div class="grid2"><div class="setting-card"><div class="active-label">01 · PROGRAMA</div><h3 style="margin-top:12px">Data de início do ciclo</h3><p>A semana de readaptação é calculada a partir desta data. Alterá-la não apaga os treinos existentes.</p><div class="form-field"><label for="cycle-start">Início das 8 semanas</label><input id="cycle-start" type="date" value="${escapeHTML(db.profile.startDate)}" /></div><div class="setting-actions"><button class="button primary" data-action="save-settings">${ico('check')} Salvar data</button></div><p style="margin-top:14px">Semana atual: ${weekNum()>8?'ciclo inicial concluído':weekNum()+' de 8'}. Ficha: cinco treinos e dois dias de recuperação.</p></div>
-<div class="setting-card"><div class="active-label">02 · DADOS</div><h3 style="margin-top:12px">Backup e privacidade</h3><p>Seus treinos, atividades e avaliações corporais ficam no armazenamento local deste navegador. Não são enviados para o GitHub nem compartilhados entre dispositivos. Faça backups periódicos.</p><div class="setting-actions"><button class="button outline" data-action="export-json">${ico('download')} Exportar JSON</button><button class="button outline" data-action="import-json">${ico('upload')} Importar JSON</button></div><p style="margin-top:14px">Importar substitui seus registros atuais após confirmação.</p></div>
+<div class="setting-card"><div class="active-label">02 · DADOS</div><h3 style="margin-top:12px">Backup e privacidade</h3><p>Seus registros ficam no cache local desta conta e podem ser sincronizados com seu Google Drive autorizado. O GitHub publica somente o aplicativo, nunca seus dados. Faça também backups periódicos.</p><div class="setting-actions"><button class="button outline" data-action="export-json">${ico('download')} Exportar JSON</button><button class="button outline" data-action="import-json">${ico('upload')} Importar JSON</button></div><p style="margin-top:14px">Importar substitui seus registros atuais após confirmação.</p></div>
 <div class="setting-card"><div class="active-label">03 · SEGURANÇA</div><h3 style="margin-top:12px">Boas práticas de treino</h3><div class="safety">Ajuste os elásticos apenas em pontos de ancoragem seguros. Não improvise mecanismos na estação WCT. Procure avaliação profissional presencial para corrigir a técnica e adaptar o treino quando necessário.</div><div class="separator"></div><p>Este sistema registra desempenho, mas não realiza avaliação médica nem prescrição automática de novas cargas.</p></div>
-<div class="setting-card"><div class="active-label">04 · MANUTENÇÃO</div><h3 style="margin-top:12px">Restaurar dados locais</h3><p>Esta ação apaga o histórico de musculação, atividades e medidas corporais, a sessão em andamento e a data inicial do ciclo neste navegador. Um arquivo exportado pode ser importado depois.</p><div class="setting-actions"><button class="button danger" data-action="reset">${ico('trash')} Apagar todos os dados</button></div></div></div>
-<div class="section tip-box"><div class="tip-heading">${ico('shield')} Arquitetura da V1</div><p>Aplicação web estática, sem contas e sem servidor de dados. Compatível com hospedagem por GitHub Pages. Para sincronizar entre dispositivos em uma futura versão, será necessário implantar autenticação e armazenamento seguro, com controles de acesso e privacidade.</p></div>`}
+<div class="setting-card"><div class="active-label">04 · MANUTENÇÃO</div><h3 style="margin-top:12px">Limpar cache deste dispositivo</h3><p>Remove somente o histórico e as fotografias armazenadas neste navegador, sem excluir os registros salvos no Google Drive. Para recuperar os dados sincronizados, entre novamente com seu Gmail.</p><div class="setting-actions"><button class="button danger" data-action="reset">${ico('trash')} Limpar cache local</button></div></div></div>
+${cloudSettingsPanel()}<div class="section tip-box"><div class="tip-heading">${ico('shield')} Arquitetura da V1</div><p>Versão beta: login Google e cadastro pessoal obrigatórios. Os arquivos permanecem privados na conta Google autorizada; o cache local fica separado por usuário, mas não criptografado no dispositivo. Para autenticação e sessão com garantia de servidor, será necessário um backend seguro.</p></div>`}
 function render(){const route=getRoute();setActiveNav(route);const content={dashboard,treinos,atividades:activitiesPage,avaliacao:assessmentPage,evolucao,configuracoes,sessao:renderSession};app.innerHTML=content[route]();updateTimer();if(route==='avaliacao'){renderBodyPhotos().catch(()=>{});updateBodyFatPreview()}}
 function persistEdit(el){const s=db.active;if(!s)return;const arr=s.sets[el.dataset.exid];const index=Number(el.dataset.index);const set=arr?.[index];if(!set)return;if(el.dataset.edit==='reps'){if(el.value===''){set.reps=''}else{const n=Number(el.value);set.reps=Number.isFinite(n)?String(clamp(Math.round(n),0,999)):''}}else if(el.dataset.edit==='load'){set.load=String(el.value).slice(0,40)}else if(el.dataset.edit==='rpe'){set.rpe=String(el.value)}save()}
 function toggleSet(exid,index,button){
@@ -475,26 +628,26 @@ async function importJSON(file,mode='replace'){if(!file||file.size>80*1024*1024)
  return;
 }
 if(!confirm(`Substituir dados locais por ${imported.sessions.length} sessões do backup? Os dados atuais serão sobrescritos. Faça um backup antes de continuar.`))return;
-db={version:1,profile:{startDate:imported.profile.startDate},sessions:imported.sessions,activities:imported.activities||[],measurements:imported.measurements||[],active:imported.active||null};save();expandedSession=null;go('evolucao');
+db={version:1,profile:{startDate:imported.profile.startDate},sessions:imported.sessions,activities:imported.activities||[],measurements:imported.measurements||[],active:imported.active||null,deleted:normalizeDeleted(imported.deleted)};save();expandedSession=null;go('evolucao');
 try{
  const recovered=await importAssessmentPhotoBackup(imported.photoBackup||[],db.measurements.map(x=>x.id),{replaceExisting:true});
  toast('Backup importado. '+recovered+' foto(s) restaurada(s).');
 }catch(err){toast('Dados importados; fotos não puderam ser importadas: '+err.message)}
 }
-function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;render();return}
+function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='drive-authorize-assessment'){connectCloud();return}if(a==='drive-consent-later'){drivePromptVisible=false;render();return}if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;render();return}
 if(a==='cancel-photo-editor'){photoEditId=null;render();return}
 if(a==='save-assessment-photos'){saveEditedAssessmentPhotos(btn.dataset.id);return}
 if(a==='delete-assessment'){if(confirm('Excluir esta avaliação corporal e suas fotos neste navegador?')){
  const id=btn.dataset.id;
- db.measurements=db.measurements.filter(x=>x.id!==id);save();photoEditId=null;render();toast('Avaliação excluída.');
+ db.deleted.measurements=[...new Set([...db.deleted.measurements,id])];db.measurements=db.measurements.filter(x=>x.id!==id);save();photoEditId=null;render();toast('Avaliação excluída.');
  removeAssessmentPhotos(id).catch(()=>toast('As medidas foram apagadas, mas a exclusão das fotos não foi concluída.'));
-}return}if(a==='view-activities'){go('atividades');return}if(a==='save-activity'){saveActivity();return}if(a==='delete-activity'){if(confirm('Excluir este registro de atividade?')){db.activities=db.activities.filter(x=>x.id!==btn.dataset.id);save();render();toast('Atividade excluída.')}return}if(a==='mark-past-week'){saveManualEntries(getMissingScheduledSessions(PROGRAM,db.sessions,todayISO()));return}if(a==='mark-past-day'){const item=getMissingScheduledSessions(PROGRAM,db.sessions,todayISO()).find(e=>e.dayId===btn.dataset.day&&e.date===btn.dataset.date);if(item)saveManualEntries([item]);return}if(a==='apply-history-link'){const entries=parseCompletionHash(location.hash,PROGRAM,todayISO());if(!entries.length){toast('O link de registro não é válido.');return}const result=mergeCompletedSessions(db.sessions,entries,db.profile.startDate);db.sessions=result.sessions;save();go('evolucao');toast(result.added?`${result.added} treino(s) concluído(s) registrado(s).`:'Os treinos já estavam registrados.');return}if(a==='cancel-history-link'){go('dashboard');return}if(a==='choose-day'){selectedDay=btn.dataset.day;go('treinos');return}if(a==='view-plans'){go('treinos');return}if(a==='start'){startSession(btn.dataset.day);return}if(a==='resume'){go('sessao');return}if(a==='set-done'){toggleSet(btn.dataset.exid,btn.dataset.index,btn);return}if(a==='timer'){startTimer(btn.dataset.rest,btn.dataset.ex);return}if(a==='stop-timer'){timerEnd=0;updateTimer();return}if(a==='discard'){if(db.active&&confirm('Descartar a sessão em andamento? Séries não finalizadas serão perdidas.')){db.active=null;save();timerEnd=0;go('treinos');}return}if(a==='finish'){finish();return}if(a==='expand'){expandedSession=expandedSession===btn.dataset.id?null:btn.dataset.id;render();return}if(a==='delete-session'){if(confirm('Excluir este registro de treino?')){db.sessions=db.sessions.filter(s=>s.id!==btn.dataset.id);save();render();toast('Registro excluído.')}return}if(a==='save-settings'){const v=$('#cycle-start')?.value;if(!v||!/^\d{4}-\d{2}-\d{2}$/.test(v)){toast('Informe uma data válida.');return}db.profile.startDate=v;save();render();toast('Data inicial atualizada.');return}if(a==='export-json'){exportJSON();return}if(a==='export-csv'){exportCSV();return}if(a==='import-merge'){pendingImportMode='merge';$('#import-file').click();return}if(a==='import-json'){pendingImportMode='replace';$('#import-file').click();return}if(a==='reset'){if(confirm('Apagar TODOS os seus dados de treino deste navegador? Esta operação não pode ser desfeita sem backup.')){db=initialData();selectedDay='A';expandedSession=null;timerEnd=0;save();go('dashboard');clearAllAssessmentPhotos().catch(()=>{});toast('Dados locais restaurados, incluindo o histórico de fotos quando disponível.')}return}}
+}return}if(a==='view-activities'){go('atividades');return}if(a==='save-activity'){saveActivity();return}if(a==='delete-activity'){if(confirm('Excluir este registro de atividade?')){db.deleted.activities=[...new Set([...db.deleted.activities,btn.dataset.id])];db.activities=db.activities.filter(x=>x.id!==btn.dataset.id);save();render();toast('Atividade excluída.')}return}if(a==='mark-past-week'){saveManualEntries(getMissingScheduledSessions(PROGRAM,db.sessions,todayISO()));return}if(a==='mark-past-day'){const item=getMissingScheduledSessions(PROGRAM,db.sessions,todayISO()).find(e=>e.dayId===btn.dataset.day&&e.date===btn.dataset.date);if(item)saveManualEntries([item]);return}if(a==='apply-history-link'){const entries=parseCompletionHash(location.hash,PROGRAM,todayISO());if(!entries.length){toast('O link de registro não é válido.');return}const result=mergeCompletedSessions(db.sessions,entries,db.profile.startDate);db.sessions=result.sessions;save();go('evolucao');toast(result.added?`${result.added} treino(s) concluído(s) registrado(s).`:'Os treinos já estavam registrados.');return}if(a==='cancel-history-link'){go('dashboard');return}if(a==='choose-day'){selectedDay=btn.dataset.day;go('treinos');return}if(a==='view-plans'){go('treinos');return}if(a==='start'){startSession(btn.dataset.day);return}if(a==='resume'){go('sessao');return}if(a==='set-done'){toggleSet(btn.dataset.exid,btn.dataset.index,btn);return}if(a==='timer'){startTimer(btn.dataset.rest,btn.dataset.ex);return}if(a==='stop-timer'){timerEnd=0;updateTimer();return}if(a==='discard'){if(db.active&&confirm('Descartar a sessão em andamento? Séries não finalizadas serão perdidas.')){db.active=null;save();timerEnd=0;go('treinos');}return}if(a==='finish'){finish();return}if(a==='expand'){expandedSession=expandedSession===btn.dataset.id?null:btn.dataset.id;render();return}if(a==='delete-session'){if(confirm('Excluir este registro de treino?')){db.deleted.sessions=[...new Set([...db.deleted.sessions,btn.dataset.id])];db.sessions=db.sessions.filter(s=>s.id!==btn.dataset.id);save();render();toast('Registro excluído.')}return}if(a==='save-settings'){const v=$('#cycle-start')?.value;if(!v||!/^\d{4}-\d{2}-\d{2}$/.test(v)){toast('Informe uma data válida.');return}db.profile.startDate=v;save();render();toast('Data inicial atualizada.');return}if(a==='export-json'){exportJSON();return}if(a==='export-csv'){exportCSV();return}if(a==='import-merge'){pendingImportMode='merge';$('#import-file').click();return}if(a==='import-json'){pendingImportMode='replace';$('#import-file').click();return}if(a==='reset'){if(!confirm('Limpar SOMENTE os dados deste navegador? Nada será apagado do seu Google Drive. Você deverá autenticar o Gmail novamente para recuperar o histórico sincronizado.'))return;if(AUTH_CONTEXT){localStorage.removeItem(STORAGE_KEY);db=initialData();timerEnd=0;const finishLogout=()=>{if(globalThis.__FORCA_AUTH_LOGOUT)globalThis.__FORCA_AUTH_LOGOUT()};clearAllAssessmentPhotos().then(finishLogout).catch(finishLogout);return;}db=initialData();selectedDay='A';expandedSession=null;timerEnd=0;save();go('dashboard');clearAllAssessmentPhotos().catch(()=>{});toast('Dados locais restaurados.');return}}
 app.addEventListener('click',delegatedClick);
 $('#timer').addEventListener('click',delegatedClick);
-app.addEventListener('input',e=>{if(['body-heightCm','body-waistCm','body-neckCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();if(e.target.matches('[data-edit]')){persistEdit(e.target);const container=e.target.closest?.('.session-exercise');const feedback=container?.querySelector?.('[data-set-feedback]');if(feedback)feedback.hidden=true;e.target.closest?.('tr')?.classList?.remove('set-invalid');}});
+app.addEventListener('input',e=>{if(['body-heightCm','body-waistCm','body-neckCm','body-hipsCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();if(e.target.matches('[data-edit]')){persistEdit(e.target);const container=e.target.closest?.('.session-exercise');const feedback=container?.querySelector?.('[data-set-feedback]');if(feedback)feedback.hidden=true;e.target.closest?.('tr')?.classList?.remove('set-invalid');}});
 app.addEventListener('change',e=>{
  if(e.target.matches('[data-edit]'))persistEdit(e.target);
- if(['body-heightCm','body-waistCm','body-neckCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();
+ if(['body-heightCm','body-waistCm','body-neckCm','body-hipsCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();
  if(e.target.dataset?.photoInput){
   const file=e.target.files?.[0];
   const preview=e.target.closest?.('.body-photo-slot')?.querySelector?.('.body-photo-preview');

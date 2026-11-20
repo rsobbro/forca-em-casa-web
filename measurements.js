@@ -90,12 +90,21 @@ export function estimateNavyMale(heightCm,waistCm,neckCm){
  const pct=86.010*Math.log10((waistCm-neckCm)/inch)-70.041*Math.log10(heightCm/inch)+36.76;
  return pct>0&&pct<75?round1(pct):null;
 }
+/** Estimativa circunferencial feminina: altura, cintura, quadril e pescoço em cm. */
+export function estimateNavyFemale(heightCm,waistCm,hipsCm,neckCm){
+ const values=[heightCm,waistCm,hipsCm,neckCm];
+ if(!values.every(Number.isFinite)||heightCm<100||heightCm>240||waistCm<35||waistCm>250
+ ||hipsCm<35||hipsCm>250||neckCm<15||neckCm>90||waistCm+hipsCm<=neckCm)return null;
+ const inch=2.54;
+ const pct=163.205*Math.log10((waistCm+hipsCm-neckCm)/inch)-97.684*Math.log10(heightCm/inch)-78.387;
+ return pct>0&&pct<75?round1(pct):null;
+}
 /**
  * Estimativas vinculadas a UMA avaliação. A cintura/pescoço/peso nunca
  * vêm de outra data; a altura pode ser herdada da última avaliação anterior
  * porque, em adultos, costuma ser estável no intervalo observado.
  */
-export function estimateBodyFatForAssessment(record,history=[]){
+export function estimateBodyFatForAssessment(record,history=[],sex='male'){
  if(!record||typeof record!=='object')return {rfm:null,navy:null,fatMassKg:null,leanMassKg:null,heightSource:null};
  const candidates=(history||[]).filter(x=>x&&x.date<=record.date&&typeof x.heightCm==='number'&&Number.isFinite(x.heightCm))
    .slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
@@ -103,24 +112,25 @@ export function estimateBodyFatForAssessment(record,history=[]){
  const source=typeof record.heightCm==='number'?'mesma avaliação':height!==null?'avaliação anterior':null;
  const waist=typeof record.waistCm==='number'?record.waistCm:null;
  const neck=typeof record.neckCm==='number'?record.neckCm:null;
- const rfm=estimateRFM(height,waist,'male');
- const navy=estimateNavyMale(height,waist,neck);
+ const hips=typeof record.hipsCm==='number'?record.hipsCm:null;
+ const rfm=estimateRFM(height,waist,sex);
+ const navy=sex==='male'?estimateNavyMale(height,waist,neck):sex==='female'?estimateNavyFemale(height,waist,hips,neck):null;
  const kg=typeof record.weightKg==='number'?record.weightKg:null;
  const fatMassKg=rfm!==null&&kg!==null?round1(kg*rfm/100):null;
  const leanMassKg=rfm!==null&&kg!==null?round1(kg*(1-rfm/100)):null;
  return {rfm,navy,fatMassKg,leanMassKg,heightSource:source};
 }
-export function estimatedBodyFatSeries(measurements,method='rfm'){
+export function estimatedBodyFatSeries(measurements,method='rfm',sex='male'){
  if(!['rfm','navy'].includes(method))return [];
  return (measurements||[]).filter(x=>x&&typeof x.date==='string')
   .slice().sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)))
-  .map(x=>({date:x.date,value:estimateBodyFatForAssessment(x,measurements)[method]}))
+  .map(x=>({date:x.date,value:estimateBodyFatForAssessment(x,measurements,sex)[method]}))
   .filter(x=>x.value!==null);
 }
-export function estimatesFor(measurements){
+export function estimatesFor(measurements,sex='male'){
  const sorted=(measurements||[]).filter(x=>x&&typeof x.date==='string').slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
- const rfmEvaluation=sorted.find(x=>estimateBodyFatForAssessment(x,measurements).rfm!==null);
- const navyEvaluation=sorted.find(x=>estimateBodyFatForAssessment(x,measurements).navy!==null);
- return {rfm:rfmEvaluation?estimateBodyFatForAssessment(rfmEvaluation,measurements).rfm:null,
- navy:navyEvaluation?estimateBodyFatForAssessment(navyEvaluation,measurements).navy:null};
+ const rfmEvaluation=sorted.find(x=>estimateBodyFatForAssessment(x,measurements,sex).rfm!==null);
+ const navyEvaluation=sorted.find(x=>estimateBodyFatForAssessment(x,measurements,sex).navy!==null);
+ return {rfm:rfmEvaluation?estimateBodyFatForAssessment(rfmEvaluation,measurements,sex).rfm:null,
+ navy:navyEvaluation?estimateBodyFatForAssessment(navyEvaluation,measurements,sex).navy:null};
 }
