@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {GOOGLE_DRIVE_SCOPE,GOOGLE_AUTH_SCOPES,GOOGLE_LOGIN_SCOPES,googleClientIdConfigured,authorizeIdentity,authorizeDrive,createGoogleDriveClient,detectDataConflicts,drivePhotoName,escapeDriveQuery,driveOperation,describeDriveFailure} from '../google-drive-sync.js';
+import {GOOGLE_DRIVE_SCOPE,GOOGLE_AUTH_SCOPES,GOOGLE_LOGIN_SCOPES,googleClientIdConfigured,authorizeIdentity,authorizeDrive,createGoogleDriveClient,detectDataConflicts,drivePhotoName,escapeDriveQuery,driveOperation,describeDriveFailure,describeGoogleOAuthFailure} from '../google-drive-sync.js';
 
 const CLIENT_ID='123456789012-this-is-an-oauth-app.apps.googleusercontent.com';
 function mockDrive(){
@@ -142,4 +142,38 @@ test('mensagem de erro da API nunca ecoa dados privados nem credenciais',()=>{
  const error=describeDriveFailure(403,'forbidden','Bearer ABCD_SENSITIVE_NAME ABCD_SENSITIVE_TOKEN','envio de conteúdo ao Drive');
  assert.doesNotMatch(error,/ABCD_SENSITIVE/);
  assert.match(error,/HTTP 403/);
+});
+
+test('pedido de autorização Drive não força consentimento repetido e identifica o Gmail validado',async()=>{
+ let config,requested=0;
+ const fake={accounts:{oauth2:{initTokenClient(options){
+  config=options;
+  return {requestAccessToken(arg){requested++;assert.equal(arg,undefined);
+   options.callback({access_token:'token-ok',scope:options.scope});
+  }};
+ }}}};
+ const result=await authorizeDrive(CLIENT_ID,fake,'pessoa@gmail.com');
+ assert.equal(result,'token-ok');
+ assert.equal(requested,1);
+ assert.equal(config.prompt,'');
+ assert.equal(config.login_hint,'pessoa@gmail.com');
+ assert.ok(config.scope.includes(GOOGLE_DRIVE_SCOPE));
+});
+test('não usa login_hint não verificado e protege resposta em erro OAuth',async()=>{
+ let config;
+ const fake={accounts:{oauth2:{initTokenClient(options){
+  config=options;
+  return {requestAccessToken(){options.callback({error:'invalid_request'})}};
+ }}}};
+ await assert.rejects(authorizeDrive(CLIENT_ID,fake,'nao-gmail@empresa.com'),/rejeitou a solicitação OAuth/);
+ assert.equal(config.login_hint,undefined);
+ assert.equal(config.prompt,'');
+ for(const [code,fragment] of [
+  ['origin_mismatch','origem do site'],
+  ['popup_failed_to_open','pop-ups'],
+  ['popup_closed','fechada'],
+  ['access_denied','não autorizou'],
+  ['invalid_request','rejeitou']
+ ])assert.match(describeGoogleOAuthFailure(code),new RegExp(fragment,'i'));
+ assert.doesNotMatch(describeGoogleOAuthFailure('x<SENSITIVE-TOKEN>'),/SENSITIVE-TOKEN/);
 });
