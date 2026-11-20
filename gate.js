@@ -29,7 +29,8 @@ function loginMarkup(message){
   ${message?`<p class="auth-error" role="alert">${esc(message)}</p>`:''}
   ${available?`<button class="button primary auth-google-button" type="button" data-gate="login">Continuar com Google</button>`:
     `<p class="auth-warning">Esta versão beta aguarda o Client ID OAuth público do Google Cloud. O login real permanece desativado.</p>`}
-  <p class="auth-disclaimer">Nunca solicitamos sua senha do Gmail. A autorização para salvar avaliações no Google Drive será apresentada separadamente no momento do primeiro salvamento.</p>`;
+  <p class="auth-disclaimer">Nunca solicitamos sua senha do Gmail. A autorização para salvar avaliações no Google Drive será apresentada separadamente no momento do primeiro salvamento.</p>
+  <p class="auth-disclaimer">Se o Google abrir outra guia e apresentar erro 400, feche <strong>somente a guia do Google</strong> e retorne ao endereço do Força em Casa no Chrome. Não tente atualizar o endereço accounts.google.com/gis nem exclua os dados do site. Em caso de repetição, revise as origens OAuth no Google Cloud.</p>`;
 }
 function registrationMarkup(message){
  const user=authorizedUser;
