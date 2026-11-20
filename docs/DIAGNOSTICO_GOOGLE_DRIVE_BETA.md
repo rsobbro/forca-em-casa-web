@@ -63,3 +63,25 @@
 - Validar no mesmo navegador: atualizar a aba, acessar Configurações e selecionar
   `Sincronizar agora`; nenhuma limpeza de armazenamento local é necessária.
 - Não considerar sincronizado enquanto o Google Drive não confirmar o envio.
+
+## Homologação OAuth no Android — Beta 1.7.2
+
+- Sintoma observado em 19/11/2026: guia do Chrome com
+  `accounts.google.com/gis` e tela genérica Google `400 malformed request`.
+- A captura não expõe parâmetros completos da solicitação e, portanto,
+  não permite atribuir uma causa única ao erro. O código da beta foi atualizado
+  para simplificar o consentimento incremental e orientar a recuperação.
+- `authorizeDrive` usa `prompt:''` (consentimento apenas quando necessário)
+  e `login_hint` do Gmail verificado no login; valida o escopo `drive.file`
+  no retorno. A identidade da conta é novamente conferida na API.
+- O fluxo registra erros OAuth conhecidos com instruções contextualizadas,
+  sem exibir tokens nem parâmetros de autenticação sensíveis.
+- A tela de entrada orienta fechar apenas a guia de erro Google e retomar a
+  autenticação pelo link da beta, sem apagar dados locais.
+- Se o 400 continuar, conferir no projeto Google Cloud:
+  OAuth Client ID tipo Web application, origem autorizada
+  `https://rsobbro.github.io`, tela de consentimento em Testing e Gmail na
+  lista de testadores, Google Drive API ativada e navegador Chrome completo
+  (não WebView embutido em apps).
+- A publicação da beta atualizada não confirma que o fluxo de autenticação
+  foi concluído em um aparelho real; essa homologação depende do usuário.
