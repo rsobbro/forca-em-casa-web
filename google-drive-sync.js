@@ -46,9 +46,9 @@ export function detectDataConflicts(local,remote){
  }
  return issues;
 }
-export const DELETE_CATEGORIES=['sessions','activities','measurements'];
+export const DELETE_CATEGORIES=['sessions','activities','measurements','meals','water'];
 export function normalizeDeleted(deleted){
- const out={sessions:[],activities:[],measurements:[]};
+ const out={sessions:[],activities:[],measurements:[],meals:[],water:[]};
  for(const kind of DELETE_CATEGORIES){
   const items=deleted?.[kind]||[];
   if(!Array.isArray(items)||items.length>5000||items.some(id=>typeof id!=='string'||!id||id.length>128)){
@@ -62,11 +62,17 @@ export function normalizeCloudData(data){
  if(!data||data.version!==1||!data.profile||typeof data.profile.startDate!=='string'
  ||!Array.isArray(data.sessions)||!Array.isArray(data.activities)||!Array.isArray(data.measurements))
  throw new Error('O histórico no Google Drive não está no formato esperado.');
- if(data.sessions.length>5000||data.activities.length>10000||data.measurements.length>2000)
+ if(data.sessions.length>5000||data.activities.length>10000||data.measurements.length>2000
+ ||Array.isArray(data.meals)&&data.meals.length>20000
+ ||Array.isArray(data.water)&&data.water.length>50000
+ ||(data.meals!==undefined&&!Array.isArray(data.meals))
+ ||(data.water!==undefined&&!Array.isArray(data.water)))
  throw new Error('O histórico excede os limites de segurança.');
- return {version:1,profile:{startDate:data.profile.startDate},
-  sessions:data.sessions,activities:data.activities,measurements:data.measurements,active:data.active||null,
-  deleted:normalizeDeleted(data.deleted)};
+ return {version:1,profile:{...data.profile},
+  sessions:data.sessions,activities:data.activities,measurements:data.measurements,
+  meals:Array.isArray(data.meals)?data.meals:[],
+  water:Array.isArray(data.water)?data.water:[],
+  active:data.active||null,deleted:normalizeDeleted(data.deleted)};
 }
 /** Mensagens de OAuth sem incluir tokens ou informações da URL de consentimento. */
 export function describeGoogleOAuthFailure(code=''){
