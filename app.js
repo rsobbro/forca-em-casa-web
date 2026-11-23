@@ -1,4 +1,4 @@
-import {PROGRAM,prescribedSets,findDay,setActiveProgram} from './plan.js';
+import {PROGRAM,BASE_PROGRAM,prescribedSets,findDay,setActiveProgram} from './plan.js';
 import {GOALS,EQUIPMENT_FEATURES,validSetup,personalizedProgram} from './personal-training.js';
 import {MEAL_KINDS,validMeal,validWater,foodTotals,mealTotals,dailyNutrition,dailyWater,lookupOpenFoodFacts} from './nutrition.js';
 import {importWatchCsv,SMARTWATCH_CSV_TEMPLATE} from './wearables.js';
@@ -64,7 +64,8 @@ function loadDB(){try{const d=JSON.parse(localStorage.getItem(STORAGE_KEY));if(d
  water:Array.isArray(d.water)?d.water.filter(validWater):[],
  active:d.active||null,deleted:normalizeDeleted(d.deleted)}}}catch{}return initialData()}
 let db=loadDB();
-setActiveProgram(personalizedProgram(PROGRAM,db.profile.setup));
+const applyPersonalProgram=()=>setActiveProgram(personalizedProgram(BASE_PROGRAM,db.profile.setup));
+applyPersonalProgram();
 const workoutTarget=()=>PROGRAM.weeklyTarget||5;
 const onboardingRequired=()=>!!AUTH_CONTEXT&&!validSetup(db.profile?.setup)&&!db.sessions.length&&!db.measurements.length;
 let equipmentFormCount=1;
@@ -102,7 +103,7 @@ async function syncCloud(silent=false){
  cloudState='sincronizando';
  try{
   const result=await cloud.sync(db);
-  db=result.db;
+  db=result.db;applyPersonalProgram();
   localStorage.setItem(STORAGE_KEY,JSON.stringify(db));
   if(result.photos.conflicts){
    cloudState='conflito';markCloudPending();
@@ -133,7 +134,7 @@ async function recoverCloud(){
  try{
   const result=await cloud.recover(db);
   // Only store a merged copy after the read-only recovery succeeds.
-  db=result.db;
+  db=result.db;applyPersonalProgram();
   localStorage.setItem(STORAGE_KEY,JSON.stringify(db));
   if(result.needsUpload)markCloudPending();
   else markCloudSaved();
@@ -410,7 +411,7 @@ async function completeOnboarding(){
  if(bodyPhotos===null)return;
  const setup={complete:true,goal,daysPerWeek,sessionsPerDay,setsPerGroup,equipment,assessmentId};
  if(!validSetup(setup)){toast('Configuração inválida. Confira frequência e inventário.');return}
- const generated=personalizedProgram(PROGRAM,setup);
+ const generated=personalizedProgram(BASE_PROGRAM,setup);
  const button=app.querySelector('[data-action="complete-onboarding"]');
  if(button)button.disabled=true;
  try{
