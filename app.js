@@ -289,10 +289,20 @@ function periodChart(mode='strength'){
  }
  const max=mode==='strength'?5:Math.max(1,...weeks.map(w=>w.value));
  const title=mode==='strength'?'Musculação':'Atividades complementares';
- return `<div class="bar-chart" role="img" aria-label="${title} nas últimas 8 semanas: ${weeks.map(w=>`${w.label}: ${w.value}`).join('; ')}">${weeks.map(w=>`<div class="bar-col"><b>${w.value}</b><div class="bar-wrap"><div class="bar ${mode==='strength'?'':'bar-extra'}" style="height:${Math.min(100,w.value/max*100)}%"></div></div><small>${w.label}</small></div>`).join('')}</div><p class="disclaimer">${mode==='strength'?'Dias da divisão A–E concluídos, até 5 por semana. Registros manuais contam como treino concluído, mas não geram séries fictícias.':'Cada corrida, pedalada, aula de karatê, natação ou outra atividade registrada conta separadamente.'}</p>`;
+ return `<div class="bar-chart" role="img" aria-label="${title} nas últimas 8 semanas: ${weeks.map(w=>`${w.label}: ${w.value}`).join('; ')}">${weeks.map(w=>`<div class="bar-col"><b>${w.value}</b><div class="bar-wrap"><div class="bar ${mode==='strength'?'':'bar-extra'}" style="height:${Math.min(100,w.value/max*100)}%"></div></div><small>${w.label}</small></div>`).join('')}</div><p class="disclaimer">${mode==='strength'?'Sessões de força contabilizadas conforme o plano individual. Registros manuais contam como treino, mas não geram séries fictícias.':'Cada corrida, pedalada, aula de karatê, natação ou outra atividade registrada conta separadamente.'}</p>`;
 }
-function sessionDetail(s){if(s.manual)return '<p>Treino concluído por informação do usuário. Não foram informados exercícios, séries, cargas ou repetições.</p>';const day=findDay(s.dayId);if(!day)return '<p>Treino não encontrado.</p>';return day.exercises.map(ex=>{const performed=(s.sets?.[ex.id]||[]).filter(x=>x.done);if(!performed.length)return '';return `<h4>${escapeHTML(recordedExerciseName(s,ex))}</h4><div>${performed.map(x=>`${escapeHTML(x.reps)} reps${x.load?` · ${escapeHTML(x.load)}`:''} · RPE ${escapeHTML(x.rpe)}`).join('<br>')}</div>`}).join('')}
-
+function sessionDetail(s){
+ if(s.manual)return '<p>Treino concluído por informação do usuário. Não foram informados exercícios, séries, cargas ou repetições.</p>';
+ const day=findDay(s.dayId);
+ const current=day?.exercises||[];
+ return Object.entries(s.sets||{}).map(([id,sets])=>{
+  const performed=Array.isArray(sets)?sets.filter(x=>x.done):[];
+  if(!performed.length)return '';
+  const ex=current.find(x=>x.id===id);
+  const name=s.exerciseNames?.[id]||ex?.name||LEGACY_EXERCISE_NAMES[id]||'Exercício registrado';
+  return `<h4>${escapeHTML(name)}</h4><div>${performed.map(x=>`${escapeHTML(String(x.reps))} reps${x.load?' · '+escapeHTML(String(x.load)):''} · RPE ${escapeHTML(String(x.rpe))}`).join(' · ')}</div>`;
+ }).join('');
+}
 function cloudRecoveryPanel(){
  if(!AUTH_CONTEXT)return '';
  const c=localRecordSummary(),connected=cloud.connected;
@@ -325,7 +335,7 @@ function evolucao(){
  return `${header('DADOS DE TREINO','Sua evolução','Musculação e atividades complementares contabilizadas separadamente, com histórico armazenado localmente e recuperável pelo Google Drive.',`<button class="button outline" data-action="export-csv">${ico('download')} Exportar CSV</button>`)}
  ${cloudRecoveryPanel()}${deviceHistoryNotice()}
  <div class="evolution-group-title"><h3>Musculação</h3><small>Treinos concluídos · séries informadas separadamente</small></div>
- <div class="grid4">${metric('check','Sessões de força',total.strengthSessions,'Disponíveis neste dispositivo')}${metric('layers','Séries efetivas',total.recordedSets,'Não inclui conclusão manual sem séries')}${metric('pulse','Repetições registradas',total.recordedReps,'Somente séries preenchidas')}${metric('calendar','Semana atual',`${week.strengthDays}/${workoutTarget()}`,'Divisões A–E nesta semana')}</div>
+ <div class="grid4">${metric('check','Sessões de força',total.strengthSessions,'Disponíveis neste dispositivo')}${metric('layers','Séries efetivas',total.recordedSets,'Não inclui conclusão manual sem séries')}${metric('pulse','Repetições registradas',total.recordedReps,'Somente séries preenchidas')}${metric('calendar','Semana atual',`${week.strengthDays}/${workoutTarget()}`,'Sessões distintas conforme sua meta')}</div>
  ${total.manualSessions?`<p class="disclaimer manual-count-notice">${total.manualSessions} treino(s) foram marcados como realizados sem detalhamento: contam na frequência e nas sessões, mas não acrescentam séries ou repetições.</p>`:''}
  <div class="evolution-group-title"><h3>Outras atividades</h3><small>Corrida, bike, karatê, natação e demais atividades</small></div>
  <div class="grid4">${metric('activity','Atividades no histórico',total.otherActivities,'Todas as atividades adicionais')}${metric('clock','Minutos no histórico',total.otherMinutes,'Total informado')}${metric('calendar','Atividades na semana',week.otherActivities,'Além da musculação')}${metric('target','Dias ativos na semana',week.totalActiveDays,'Dias únicos de força ou atividade')}</div>
@@ -986,7 +996,16 @@ function exportCSV(){
  toast('CSV exportado com treinos e atividades.');
 }
 function validSetObject(x){return x&&typeof x==='object'&&typeof x.done==='boolean'&&(typeof x.reps==='string'||typeof x.reps==='number')&&(typeof x.load==='string'||typeof x.load==='number')&&(typeof x.rpe==='string'||typeof x.rpe==='number')}
-function validSession(s){if(!s||typeof s!=='object'||!findDay(s.dayId)||typeof s.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s.date)||!s.sets||typeof s.sets!=='object'||typeof s.id!=='string')return false;for(const key of Object.keys(s.sets)){if(!PROGRAM.days.flatMap(d=>d.exercises).some(e=>e.id===key)||!Array.isArray(s.sets[key])||s.sets[key].length>5||!s.sets[key].every(validSetObject))return false}return true}
+function validSession(s){
+ if(!s||typeof s!=='object'||typeof s.id!=='string'||s.id.length>128||
+ !/^[A-E](?:[12])?$/.test(s.dayId)||!validISO(s.date)||!s.sets||typeof s.sets!=='object')return false;
+ const ids=Object.keys(s.sets);
+ if(ids.length>80)return false;
+ for(const id of ids){
+  if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id)||!Array.isArray(s.sets[id])||s.sets[id].length>5||!s.sets[id].every(validSetObject))return false;
+ }
+ return true;
+}
 async function importJSON(file,mode='replace'){if(!file||file.size>80*1024*1024){toast('Selecione um arquivo JSON de até 80 MB, incluindo fotografias.');return}let imported;try{imported=JSON.parse(await file.text())}catch{toast('Não foi possível interpretar o arquivo JSON.');return}if(!imported||imported.version!==1||!imported.profile||typeof imported.profile.startDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(imported.profile.startDate)||!Array.isArray(imported.sessions)||imported.sessions.length>5000||!imported.sessions.every(validSession)||!(imported.active===null||imported.active===undefined||validSession(imported.active))||!(imported.activities===undefined||(Array.isArray(imported.activities)&&imported.activities.length<=10000&&imported.activities.every(validActivity)))||!(imported.measurements===undefined||(Array.isArray(imported.measurements)&&imported.measurements.length<=2000&&imported.measurements.every(validBodyMeasurement)))||!(imported.meals===undefined||(Array.isArray(imported.meals)&&imported.meals.length<=20000&&imported.meals.every(validMeal)))||!(imported.water===undefined||(Array.isArray(imported.water)&&imported.water.length<=50000&&imported.water.every(validWater)))||!(imported.photoBackup===undefined||(Array.isArray(imported.photoBackup)&&imported.photoBackup.length<=6000&&imported.photoBackup.every(validPhotoBackupEntry)))){toast('O arquivo não tem o formato esperado para a V1.');return}if(mode==='merge'){
  const result=mergeHistory(db,imported);
  const summary=`${result.addedSessions} sessão(ões), ${result.addedActivities} atividade(s) e ${result.addedMeasurements} avaliação(ões) adicionais`;
