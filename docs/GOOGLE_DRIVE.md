@@ -112,3 +112,28 @@ ID tokens, sessões seguras, criptografia do cache e regras de autorização.
 - Nenhum token ou senha é guardado no armazenamento persistente.
 
 **Antes de publicar:** configurar OAuth Client ID real do Google Cloud, testar login/consentimento/recusa/recuperação e avaliar backend para autenticação e autorização robustas. Este código continua isolado da versão pública na branch beta.
+
+## V1.7.3 Beta — histórico portátil entre dispositivos
+
+- No **computador**, primeiro entrar no mesmo Gmail, autorizar o Google Drive
+  e confirmar que os registros chegaram a `Força em Casa/Dados/historico.json`.
+  A ficha marcada apenas como salva localmente não pode aparecer no telefone.
+- No **celular**, entrar com o mesmo Gmail e selecionar **Recuperar meu
+  histórico do Google Drive**. Se já existe um cadastro local, usar o botão
+  **Recuperar do Google Drive** no Painel, na Evolução ou nas Configurações.
+- A recuperação usa apenas leitura: procura as pastas existentes e não cria
+  nenhuma pasta, `perfil.json` ou `historico.json` no Drive do telefone.
+- Dados do PC e do celular são mesclados por ID; diferenças conflitantes
+  interrompem a operação sem apagar ou sobrescrever o conteúdo local.
+- Fotos do histórico da conta são baixadas por avaliação; falha em uma
+  fotografia não impede a leitura dos registros corporais.
+- Modificações posteriores no aparelho são marcadas como **pendentes de envio**.
+  O upload é automático apenas enquanto a sessão do Drive está conectada;
+  também há ação explícita **Enviar alterações ao Drive**.
+- O app registra a data do último upload **confirmado** localmente. A leitura
+  remota bem-sucedida não é apresentada como upload.
+- A integração opera sob OAuth com token temporário em memória; após fechar o
+  navegador, pode ser necessário reautorizar. Isso não altera os dados que
+  já foram realmente enviados ao Google Drive.
+- O aplicativo continua em homologação: testes automatizados não substituem
+  a validação real de upload no computador e recuperação no celular.

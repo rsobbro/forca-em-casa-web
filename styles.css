@@ -131,3 +131,17 @@ body.auth-locked #app-content{max-width:100%;width:100%;padding:0!important;marg
 .auth-recover{border-top:1px solid #3b544b;margin-top:24px;padding-top:15px}.auth-recover p{font-size:12px;color:#cedccc}
 .auth-recover small{display:block;font-size:11px;color:#9ab2a7;line-height:1.6;margin-top:9px}
 @media(max-width:640px){.cloud-assessment-banner .setting-actions{flex-direction:column}.cloud-assessment-banner .button{width:100%}.auth-recover .button{width:100%}}
+
+/* V1.7.3 — recuperação de histórico entre celular e computador */
+.cloud-recovery-panel{border:1px solid #618f63;border-left:4px solid var(--lime);background:linear-gradient(120deg,#1b3026,#162630);padding:20px;margin:15px 0 20px;border-radius:15px}
+.cloud-recovery-panel .section-head{gap:10px;flex-wrap:wrap}
+.cloud-recovery-panel p{font-size:12px;color:#d1e0d7;line-height:1.75;margin:10px 0}
+.cloud-recovery-panel p strong{color:#e1f9c1}
+.cloud-recovery-panel .setting-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:13px}
+.cloud-recovery-panel .cloud-upload-status{background:#14251f;padding:10px 13px;border-radius:9px;border:1px solid #425f4a}
+.auth-recover-first{padding:16px;background:#1a3426;border:1px solid #638564;border-radius:13px;margin:16px 0}
+.auth-recover-first>strong{color:#d5f8b3;font-size:14px}
+.auth-recover-first p{margin:7px 0 12px}
+.auth-recover-first .button{display:block;width:100%}
+.auth-new-profile-caption{font-size:12px;color:#b6cbbf;font-weight:650;margin-top:22px}
+@media(max-width:640px){.cloud-recovery-panel{padding:15px}.cloud-recovery-panel .setting-actions{flex-direction:column}.cloud-recovery-panel .button{width:100%}}
