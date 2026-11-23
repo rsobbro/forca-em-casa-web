@@ -2,6 +2,7 @@ import {PROGRAM,prescribedSets,findDay,setActiveProgram} from './plan.js';
 import {GOALS,EQUIPMENT_FEATURES,validSetup,personalizedProgram} from './personal-training.js';
 import {MEAL_KINDS,validMeal,validWater,foodTotals,mealTotals,dailyNutrition,dailyWater,lookupOpenFoodFacts} from './nutrition.js';
 import {importWatchCsv,SMARTWATCH_CSV_TEMPLATE} from './wearables.js';
+import {unlockRestSound,playRestSound} from './rest-alert.js';
 import {GOOGLE_OAUTH_CLIENT_ID} from './google-config.js';
 import {getAge} from './registration.js';
 import {googleClientIdConfigured,normalizeDeleted} from './google-drive-sync.js';
@@ -829,7 +830,7 @@ function configuracoes(){return `${header('PREFERÊNCIAS','Configurações','Per
 <div class="setting-card"><div class="active-label">03 · SEGURANÇA</div><h3 style="margin-top:12px">Boas práticas de treino</h3><div class="safety">Ajuste os elásticos apenas em pontos de ancoragem seguros. Não improvise mecanismos na estação WCT. Procure avaliação profissional presencial para corrigir a técnica e adaptar o treino quando necessário.</div><div class="separator"></div><p>Este sistema registra desempenho, mas não realiza avaliação médica nem prescrição automática de novas cargas.</p></div>
 <div class="setting-card"><div class="active-label">04 · MANUTENÇÃO</div><h3 style="margin-top:12px">Limpar cache deste dispositivo</h3><p>Remove somente o histórico e as fotografias armazenadas neste navegador, sem excluir os registros salvos no Google Drive. Para recuperar os dados sincronizados, entre novamente com seu Gmail.</p><div class="setting-actions"><button class="button danger" data-action="reset">${ico('trash')} Limpar cache local</button></div></div></div>
 ${cloudSettingsPanel()}<div class="section tip-box"><div class="tip-heading">${ico('shield')} Arquitetura da V1</div><p>Versão beta: login Google e cadastro pessoal obrigatórios. Os arquivos permanecem privados na conta Google autorizada; o cache local fica separado por usuário, mas não criptografado no dispositivo. Para autenticação e sessão com garantia de servidor, será necessário um backend seguro.</p></div>`}
-function render(){const route=getRoute();setActiveNav(route);const content={dashboard,treinos,atividades:activitiesPage,avaliacao:assessmentPage,evolucao,configuracoes,sessao:renderSession};app.innerHTML=content[route]();updateTimer();if(route==='avaliacao'){renderBodyPhotos().catch(()=>{});updateBodyFatPreview()}}
+function render(){const route=getRoute();setActiveNav(route);const content={dashboard,treinos,atividades:activitiesPage,avaliacao:assessmentPage,evolucao,configuracoes,sessao:renderSession,nutricao:nutritionPage,agua:waterPage,'primeiro-acesso':onboardingPage};app.innerHTML=content[route]();updateTimer();if(route==='avaliacao'){renderBodyPhotos().catch(()=>{});updateBodyFatPreview()}if(route==='nutricao')renderMealPhotos().catch(()=>{})}
 function persistEdit(el){const s=db.active;if(!s)return;const arr=s.sets[el.dataset.exid];const index=Number(el.dataset.index);const set=arr?.[index];if(!set)return;if(el.dataset.edit==='reps'){if(el.value===''){set.reps=''}else{const n=Number(el.value);set.reps=Number.isFinite(n)?String(clamp(Math.round(n),0,999)):''}}else if(el.dataset.edit==='load'){set.load=String(el.value).slice(0,40)}else if(el.dataset.edit==='rpe'){set.rpe=String(el.value)}save()}
 function toggleSet(exid,index,button){
  const set=db.active?.sets?.[exid]?.[Number(index)];if(!set)return;
@@ -874,9 +875,10 @@ function toggleSet(exid,index,button){
  if(progressFill)progressFill.style.width=pct+'%';
  if(finishBtn)finishBtn.innerHTML=ico('check')+' Finalizar treino ('+count+'/'+planned+')';
 }
-function startTimer(seconds,label){timerEnd=Date.now()+Number(seconds)*1000;timerLabel=label;updateTimer()}
-function updateTimer(){const el=$('#timer');if(!timerEnd){el.hidden=true;return}const left=Math.max(0,Math.ceil((timerEnd-Date.now())/1000));if(!left){timerEnd=0;el.hidden=true;toast('Descanso concluído. Você pode iniciar a próxima série.');return}el.hidden=false;el.innerHTML=`${ico('clock',21)}<span>DESCANSO</span><strong class="timer-digit">${pad(Math.floor(left/60))}:${pad(left%60)}</strong><button data-action="stop-timer" aria-label="Cancelar contagem">Parar</button>`}
+function startTimer(seconds,label){unlockRestSound();timerEnd=Date.now()+Number(seconds)*1000;timerLabel=label;updateTimer()}
+function updateTimer(){const el=$('#timer');if(!timerEnd){el.hidden=true;return}const left=Math.max(0,Math.ceil((timerEnd-Date.now())/1000));if(!left){timerEnd=0;el.hidden=true;playRestSound();toast('Descanso concluído. Você pode iniciar a próxima série.');return}el.hidden=false;el.innerHTML=`${ico('clock',21)}<span>DESCANSO</span><strong class="timer-digit">${pad(Math.floor(left/60))}:${pad(left%60)}</strong><button data-action="stop-timer" aria-label="Cancelar contagem">Parar</button>`}
 const timerInterval=setInterval(()=>{if(timerEnd)updateTimer()},500);
+if(typeof document?.addEventListener==='function')document.addEventListener('visibilitychange',()=>{if(timerEnd&&!document.hidden)updateTimer()});
 if(typeof timerInterval.unref==='function')timerInterval.unref();
 function download(text,name,type){const blob=new Blob([text],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)}
 async function exportJSON(){
