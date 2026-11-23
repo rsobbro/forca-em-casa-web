@@ -16,7 +16,7 @@ test('aba Evolução permite confirmar seg/ter, contabilizar 2/5 e manter série
  globalThis.confirm=()=>true;
  try{
   await import('../app.js');
-  assert.match(el('#app-content').innerHTML,/Este navegador não possui registros/);
+  assert.match(el('#app-content').innerHTML,/Não existem registros neste navegador/);
   assert.match(el('#app-content').innerHTML,/Mesclar backup JSON/);
   assert.match(el('#app-content').innerHTML,/Confirmar os 2 treinos/);
   const click=(action,props={})=>handlers.click({target:{closest:()=>({dataset:{action,...props}})}});
