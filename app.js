@@ -348,11 +348,11 @@ function equipmentOnboardingRow(index){
 function onboardingPage(){
  return `${header('CADASTRO INICIAL','Configure seu primeiro treino','Sua meta, equipamentos comprovados e avaliação inicial serão usados para criar um programa seguro e ajustável.')}
  <section class="panel section"><div class="section-head"><h3 class="section-title">1 · Objetivo e frequência</h3></div>
- <p>Esta versão cria uma sessão por dia, até cinco dias semanais. Você pode revisar o plano posteriormente.</p>
+ <p>Escolha uma ou duas sessões por dia, em até cinco dias da semana. A opção de duas sessões divide o treino em blocos menores; respeite intervalos suficientes para recuperação.</p>
  <div class="body-form-grid">
  <div class="form-field"><label for="setup-goal">Qual é seu objetivo?</label><select id="setup-goal">${GOALS.map(g=>`<option value="${g.id}">${escapeHTML(g.label)}</option>`).join('')}</select></div>
  <div class="form-field"><label for="setup-days">Quantos dias quer treinar por semana?</label><select id="setup-days">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===3?'selected':''}>${n} dia(s) por semana</option>`).join('')}</select></div>
- <div class="form-field"><label for="setup-sessions">Treinos por dia</label><select id="setup-sessions"><option value="1">1 sessão por dia (disponível na beta)</option></select></div>
+ <div class="form-field"><label for="setup-sessions">Treinos por dia</label><select id="setup-sessions"><option value="1">1 sessão por dia</option><option value="2">2 sessões curtas por dia</option></select></div>
  <div class="form-field"><label for="setup-sets">Séries por exercício/agrupamento</label><select id="setup-sets">${[1,2,3,4].map(n=>`<option value="${n}" ${n===2?'selected':''}>${n} séries</option>`).join('')}</select></div>
  </div></section>
  <section class="panel section"><div class="section-head"><h3 class="section-title">2 · Inventário com fotos</h3></div>
