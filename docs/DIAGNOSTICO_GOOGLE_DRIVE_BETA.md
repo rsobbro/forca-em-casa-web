@@ -85,3 +85,18 @@
   (não WebView embutido em apps).
 - A publicação da beta atualizada não confirma que o fluxo de autenticação
   foi concluído em um aparelho real; essa homologação depende do usuário.
+
+## Beta V1.7.3 — recuperação de histórico do PC no celular
+
+- Recuperação agora está visível no cadastro, painel, evolução e configurações.
+- Confirmar primeiro o envio em `Força em Casa/Dados/historico.json` pelo
+  computador. Salvar apenas no cache do navegador não sincroniza dispositivos.
+- O celular lê o histórico sob autorização Google, localiza as pastas existentes
+  sem criar pastas/arquivos adicionais, mescla registros e fotos, e preserva os
+  registros já existentes no aparelho.
+- Se não houver `historico.json`, o app informa a ausência sem publicar
+  uma base vazia por engano.
+- Registros feitos enquanto o Drive está desconectado são marcados como
+  pendentes até que o Google confirme o upload.
+- Testes automatizados não confirmam que o histórico pessoal foi carregado;
+  homologar com o mesmo Gmail no Chrome do computador e do Android.
