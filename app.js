@@ -939,9 +939,30 @@ function download(text,name,type){const blob=new Blob([text],{type});const url=U
 async function exportJSON(){
  try{
   const backup=await exportAssessmentPhotoBackup();
-  download(JSON.stringify({...db,photoBackup:backup.photos,exportedAt:new Date().toISOString()},null,2),`forca-em-casa-backup-${todayISO()}.json`,'application/json');
+  download(JSON.stringify({...db,photoBackup:backup.photos.filter(x=>allowedPrivatePhotoIds().has(x.assessmentId)),exportedAt:new Date().toISOString()},null,2),`forca-em-casa-backup-${todayISO()}.json`,'application/json');
   toast(backup.available?`Backup gerado com ${backup.photos.length} fotografia(s) privada(s). Proteja este arquivo.`:'Backup sem fotos: armazenamento de imagens não disponível.');
  }catch(err){toast('Não foi possível incluir as fotos no backup: '+err.message)}
+}
+function allowedPrivatePhotoIds(){
+ return new Set([
+  ...db.measurements.map(x=>x.id),
+  ...(db.meals||[]).map(x=>'meal-'+x.id),
+  ...(db.profile?.setup?.equipment||[]).map(x=>'equipment-'+x.id)
+ ]);
+}
+function exportWellnessCSV(){
+ const rows=[['data','categoria','refeicao','alimento','quantidade_g','kcal_estimadas','proteina_g','carboidrato_g','gordura_g','fonte','agua_ml']];
+ for(const meal of db.meals||[]){
+  for(const food of meal.foods){
+   const t=foodTotals(food);
+   rows.push([meal.date,'alimento',MEAL_KINDS.find(k=>k.id===meal.kind)?.label||meal.kind,food.name,food.grams,
+    t.kcal,t.proteinG,t.carbsG,t.fatG,food.source||'','']);
+  }
+ }
+ for(const w of db.water||[])rows.push([w.date,'água','','','','','','','','',w.ml]);
+ download('\ufeff'+rows.map(row=>row.map(csvEsc).join(';')).join('\r\n'),
+  'forca-em-casa-nutricao-hidratacao-'+todayISO()+'.csv','text/csv;charset=utf-8');
+ toast('Relatório de alimentação e hidratação exportado. Valores nutricionais são estimativas.');
 }
 function csvEsc(x){const s=String(x??'');return `"${s.replace(/"/g,'""')}"`}
 function exportCSV(){
@@ -957,21 +978,22 @@ function exportCSV(){
 }
 function validSetObject(x){return x&&typeof x==='object'&&typeof x.done==='boolean'&&(typeof x.reps==='string'||typeof x.reps==='number')&&(typeof x.load==='string'||typeof x.load==='number')&&(typeof x.rpe==='string'||typeof x.rpe==='number')}
 function validSession(s){if(!s||typeof s!=='object'||!findDay(s.dayId)||typeof s.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s.date)||!s.sets||typeof s.sets!=='object'||typeof s.id!=='string')return false;for(const key of Object.keys(s.sets)){if(!PROGRAM.days.flatMap(d=>d.exercises).some(e=>e.id===key)||!Array.isArray(s.sets[key])||s.sets[key].length>5||!s.sets[key].every(validSetObject))return false}return true}
-async function importJSON(file,mode='replace'){if(!file||file.size>80*1024*1024){toast('Selecione um arquivo JSON de até 80 MB, incluindo fotografias.');return}let imported;try{imported=JSON.parse(await file.text())}catch{toast('Não foi possível interpretar o arquivo JSON.');return}if(!imported||imported.version!==1||!imported.profile||typeof imported.profile.startDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(imported.profile.startDate)||!Array.isArray(imported.sessions)||imported.sessions.length>5000||!imported.sessions.every(validSession)||!(imported.active===null||imported.active===undefined||validSession(imported.active))||!(imported.activities===undefined||(Array.isArray(imported.activities)&&imported.activities.length<=10000&&imported.activities.every(validActivity)))||!(imported.measurements===undefined||(Array.isArray(imported.measurements)&&imported.measurements.length<=2000&&imported.measurements.every(validBodyMeasurement)))||!(imported.photoBackup===undefined||(Array.isArray(imported.photoBackup)&&imported.photoBackup.length<=6000&&imported.photoBackup.every(validPhotoBackupEntry)))){toast('O arquivo não tem o formato esperado para a V1.');return}if(mode==='merge'){
+async function importJSON(file,mode='replace'){if(!file||file.size>80*1024*1024){toast('Selecione um arquivo JSON de até 80 MB, incluindo fotografias.');return}let imported;try{imported=JSON.parse(await file.text())}catch{toast('Não foi possível interpretar o arquivo JSON.');return}if(!imported||imported.version!==1||!imported.profile||typeof imported.profile.startDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(imported.profile.startDate)||!Array.isArray(imported.sessions)||imported.sessions.length>5000||!imported.sessions.every(validSession)||!(imported.active===null||imported.active===undefined||validSession(imported.active))||!(imported.activities===undefined||(Array.isArray(imported.activities)&&imported.activities.length<=10000&&imported.activities.every(validActivity)))||!(imported.measurements===undefined||(Array.isArray(imported.measurements)&&imported.measurements.length<=2000&&imported.measurements.every(validBodyMeasurement)))||!(imported.meals===undefined||(Array.isArray(imported.meals)&&imported.meals.length<=20000&&imported.meals.every(validMeal)))||!(imported.water===undefined||(Array.isArray(imported.water)&&imported.water.length<=50000&&imported.water.every(validWater)))||!(imported.photoBackup===undefined||(Array.isArray(imported.photoBackup)&&imported.photoBackup.length<=6000&&imported.photoBackup.every(validPhotoBackupEntry)))){toast('O arquivo não tem o formato esperado para a V1.');return}if(mode==='merge'){
  const result=mergeHistory(db,imported);
  const summary=`${result.addedSessions} sessão(ões), ${result.addedActivities} atividade(s) e ${result.addedMeasurements} avaliação(ões) adicionais`;
  if(!confirm('Mesclar backup mantendo os registros atuais? Serão incluídos: '+summary+'. Registros repetidos não serão duplicados.'))return;
- db=result.db;save();expandedSession=null;go('evolucao');
+ db={...result.db,deleted:normalizeDeleted(result.db.deleted)};applyPersonalProgram();save();expandedSession=null;go('evolucao');
  try{
-  const recovered=await importAssessmentPhotoBackup(imported.photoBackup||[],db.measurements.map(x=>x.id));
+  const recovered=await importAssessmentPhotoBackup(imported.photoBackup||[],[...allowedPrivatePhotoIds()]);
   toast('Backup mesclado. '+recovered+' foto(s) restaurada(s).');
  }catch(err){toast('Dados mesclados; fotos não puderam ser importadas: '+err.message)}
  return;
 }
 if(!confirm(`Substituir dados locais por ${imported.sessions.length} sessões do backup? Os dados atuais serão sobrescritos. Faça um backup antes de continuar.`))return;
-db={version:1,profile:{startDate:imported.profile.startDate},sessions:imported.sessions,activities:imported.activities||[],measurements:imported.measurements||[],active:imported.active||null,deleted:normalizeDeleted(imported.deleted)};save();expandedSession=null;go('evolucao');
+db={version:1,profile:{...imported.profile,startDate:imported.profile.startDate},sessions:imported.sessions,activities:imported.activities||[],measurements:imported.measurements||[],
+ meals:imported.meals||[],water:imported.water||[],active:imported.active||null,deleted:normalizeDeleted(imported.deleted)};applyPersonalProgram();save();expandedSession=null;go('evolucao');
 try{
- const recovered=await importAssessmentPhotoBackup(imported.photoBackup||[],db.measurements.map(x=>x.id),{replaceExisting:true});
+ const recovered=await importAssessmentPhotoBackup(imported.photoBackup||[],[...allowedPrivatePhotoIds()],{replaceExisting:true});
  toast('Backup importado. '+recovered+' foto(s) restaurada(s).');
 }catch(err){toast('Dados importados; fotos não puderam ser importadas: '+err.message)}
 }
