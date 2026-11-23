@@ -37,6 +37,12 @@ function registrationMarkup(message){
  return `<h2>Crie seu cadastro</h2>
  <p>Gmail confirmado: <strong>${esc(user?.email)}</strong>. Cadastre seus dados agora. As avaliações e fotografias exigirão sua autorização do Drive somente quando você decidir salvar na nuvem.</p>
  ${message?`<p class="auth-error" role="alert">${esc(message)}</p>`:''}
+ <div class="auth-recover auth-recover-first"><strong>Já usa o Força em Casa no computador?</strong>
+  <p>Entre no mesmo Gmail e recupere os treinos, avaliações e fotos que já foram enviados ao seu Google Drive. Não faça outro cadastro.</p>
+  <button class="button primary" type="button" data-gate="recover">Recuperar meu histórico do Google Drive</button>
+  <small>O Google solicitará permissão para ler apenas os arquivos deste aplicativo. Seus dados neste aparelho serão preservados.</small>
+ </div>
+ <div class="auth-new-profile-caption">Ou, se esta é sua primeira utilização, crie seu cadastro:</div>
  <form id="registration-form" class="auth-form">
   <div class="form-field"><label for="reg-name">Nome completo *</label><input id="reg-name" autocomplete="name" maxlength="100" minlength="3" required placeholder="Nome e sobrenome"></div>
   <div class="form-field"><label for="reg-birthDate">Data de nascimento *</label><input id="reg-birthDate" type="date" min="1900-01-01" required><small id="reg-age-hint">A idade será calculada automaticamente.</small></div>
@@ -45,11 +51,6 @@ function registrationMarkup(message){
   <label class="auth-consent"><input id="reg-consent" type="checkbox" required><span>Concordo com o cadastro e o armazenamento temporário dos meus registros neste dispositivo. Sei que o acesso ao Google Drive será solicitado separadamente quando eu salvar minha primeira avaliação.</span></label>
   <button class="button primary auth-google-button" type="submit">Criar cadastro e entrar</button>
  </form>
- <div class="auth-recover">
-  <p>Já tem cadastro e avaliações em outro dispositivo?</p>
-  <button class="button outline" type="button" data-gate="recover">Recuperar do meu Google Drive</button>
-  <small>A recuperação solicita sua permissão para ler os arquivos que o Força em Casa criou na sua conta.</small>
- </div>
  <button class="button outline auth-back" data-gate="back">Voltar para login</button>
  <p class="auth-disclaimer">O cadastro beta está disponível para maiores de 18 anos.</p>`;
 }
@@ -124,8 +125,12 @@ async function boot(){
  if(!local)local={version:1,profile:{startDate:new Date().toISOString().slice(0,10)},sessions:[],activities:[],measurements:[],active:null,deleted:normalizeDeleted(null)};
  stage='loading';present(controller.connected?'Recuperando registros autorizados no Drive...':'Carregando seus treinos locais...');
  if(controller.connected){
-  const result=await controller.sync(local);
+  // A escolha "Recuperar" é somente leitura. Nunca publique uma base
+  // local vazia antes de verificar o histórico do outro dispositivo.
+  const result=await controller.recover(local);
   local=result.db;
+  if(result.needsUpload)localStorage.setItem(cacheKey+'-drive-pending','1');
+  else localStorage.removeItem(cacheKey+'-drive-pending');
  }
  localStorage.setItem(cacheKey,JSON.stringify(local));
  localStorage.setItem(BROWSER_OWNER,authorizedUser.sub);
