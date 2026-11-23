@@ -137,3 +137,92 @@ test('interface reabilita o botão de sincronizar mesmo após uma exceção',asy
  const app=readFileSync(new URL('../app.js',import.meta.url),'utf8');
  assert.match(app,/finally\{\s*cloudBusy=false;[\s\S]*?refreshCloudSyncView\(\);\s*\}/);
 });
+
+test('celular novo recupera treinos avaliações e fotos sem publicar histórico vazio',async()=>{
+ const remote={version:1,profile:{startDate:'2026-11-16'},
+  sessions:[{id:'pc-workout',date:'2026-11-16',dayId:'A',manual:true,sets:{}}],
+  activities:[{id:'pc-run',date:'2026-11-17',type:'corrida',durationMin:25}],
+  measurements:[{id:'pc-assessment',date:'2026-11-18',weightKg:83.3,notes:''}],
+  active:null,deleted:{sessions:[],activities:[],measurements:[]}};
+ const stats={writes:0,downloads:0,saved:0};
+ const localPhotos={};
+ const phone=new GoogleDriveController({clientId:CLIENT_ID,storage:storage(),
+  photos:{
+   getAssessmentPhotos:async id=>localPhotos[id]||{},
+   saveAssessmentPhotos:async(id,photos)=>{localPhotos[id]={...(localPhotos[id]||{}),...photos};stats.saved++;}
+  }});
+ const account={sub:'12345678901234567890',permissionId:'owner-google',
+  email:'pessoa@gmail.com',emailAddress:'pessoa@gmail.com',email_verified:true};
+ phone.identity=account;phone.user=account;phone.folders={root:'root',data:'data',photos:'photos'};
+ phone.client={
+  readHistory:async()=>structuredClone(remote),
+  listPhotos:async()=>[{id:'photo1',name:'pc-assessment__front.jpg'}],
+  downloadPhoto:async()=>{stats.downloads++;return new Blob(['sample'],{type:'image/jpeg'})},
+  writeHistory:async()=>{stats.writes++}
+ };
+ const snapshot=JSON.stringify(validEmpty);
+ const result=await phone.recover(validEmpty);
+ assert.equal(JSON.stringify(validEmpty),snapshot,'A base local original não pode ser alterada durante recuperação');
+ assert.equal(stats.writes,0,'Recuperação nunca escreve no Drive');
+ assert.equal(result.db.sessions.length,1);
+ assert.equal(result.db.activities.length,1);
+ assert.equal(result.db.measurements.length,1);
+ assert.deepEqual(result.remoteCounts,{sessions:1,activities:1,measurements:1});
+ assert.equal(stats.downloads,1);
+ assert.equal(stats.saved,1);
+ assert.equal(result.photos.downloaded,1);
+ assert.equal(result.needsUpload,false);
+ assert.equal(phone.lastSync,null,'Leitura remota não é upload');
+ assert.ok(phone.lastRead);
+});
+test('Drive sem histórico não substitui os dados do celular nem cria arquivo vazio',async()=>{
+ const store=storage(),phone=new GoogleDriveController({clientId:CLIENT_ID,storage:store});
+ const account={sub:'12345678901234567890',permissionId:'owner-google',email:'pessoa@gmail.com',email_verified:true};
+ phone.identity=account;phone.user=account;phone.folders={data:'data',photos:'photos'};
+ let writes=0;
+ phone.client={readHistory:async()=>null,writeHistory:async()=>{writes++},listPhotos:async()=>[]};
+ const original={...validEmpty,sessions:[{id:'local-workout',date:'2026-11-18',dayId:'A',sets:{},manual:true}]};
+ await assert.rejects(phone.recover(original),/Nenhum historico.json/);
+ assert.equal(writes,0);
+ assert.equal(original.sessions.length,1);
+ assert.equal(store.getItem(DRIVE_OWNER_KEY),null);
+});
+test('mesclagem remota adiciona dados sem apagar registros locais diferentes',async()=>{
+ const remote={...validEmpty,sessions:[{id:'pc-workout',date:'2026-11-16',dayId:'A',sets:{},manual:true}]};
+ const local={...validEmpty,sessions:[{id:'phone-workout',date:'2026-11-19',dayId:'B',sets:{},manual:true}]};
+ const phone=new GoogleDriveController({clientId:CLIENT_ID,storage:storage(),
+  photos:{getAssessmentPhotos:async()=>({}),saveAssessmentPhotos:async()=>{}}});
+ const account={sub:'12345678901234567890',permissionId:'owner-google',email:'pessoa@gmail.com',email_verified:true};
+ phone.identity=account;phone.user=account;phone.folders={data:'data',photos:'photos'};
+ let writes=0;
+ phone.client={readHistory:async()=>remote,listPhotos:async()=>[],writeHistory:async()=>{writes++}};
+ const recovered=await phone.recover(local);
+ assert.deepEqual(new Set(recovered.db.sessions.map(x=>x.id)),new Set(['phone-workout','pc-workout']));
+ assert.equal(recovered.needsUpload,true);
+ assert.equal(writes,0);
+ assert.equal(local.sessions.length,1);
+});
+test('recuperação mantém dados estruturados mesmo se uma foto falhar',async()=>{
+ const remote={...validEmpty,measurements:[{id:'pc-assessment',date:'2026-11-18',weightKg:83.3}]};
+ const phone=new GoogleDriveController({clientId:CLIENT_ID,storage:storage(),
+  photos:{getAssessmentPhotos:async()=>({}),saveAssessmentPhotos:async()=>{throw Error('Falha IndexedDB')}}});
+ const account={sub:'12345678901234567890',permissionId:'owner-google',email:'pessoa@gmail.com',email_verified:true};
+ phone.identity=account;phone.user=account;phone.folders={data:'data',photos:'photos'};
+ phone.client={readHistory:async()=>remote,listPhotos:async()=>[{id:'photo',name:'pc-assessment__front.jpg'}],
+  downloadPhoto:async()=>new Blob(['photo'],{type:'image/jpeg'})};
+ const result=await phone.recover(validEmpty);
+ assert.equal(result.db.measurements.length,1);
+ assert.equal(result.photos.errors,1);
+});
+test('interfaces oferecem recuperação do Drive mesmo após cadastro existente',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const gate=readFileSync(new URL('../gate.js',import.meta.url),'utf8');
+ const app=readFileSync(new URL('../app.js',import.meta.url),'utf8');
+ assert.match(gate,/data-gate="recover"/);
+ assert.match(gate,/await controller\.recover\(local\)/);
+ assert.match(app,/data-action="drive-recover"/);
+ assert.match(app,/async function recoverCloud\(/);
+ assert.match(app,/cloud\.recover\(db\)/);
+ assert.match(app,/function cloudRecoveryPanel\(/);
+ assert.match(app,/markCloudPending\(\);scheduleCloudSync\(\)/);
+});
