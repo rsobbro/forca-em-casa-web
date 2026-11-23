@@ -304,7 +304,8 @@ function cloudRecoveryPanel(){
  <p>O login com Gmail não importa os registros automaticamente. Para acessar os mesmos dados de outro aparelho, use <strong>Recuperar do Google Drive</strong>. Essa ação apenas lê e mescla seu histórico, sem substituir o que já está neste dispositivo.</p>
  <p class="cloud-upload-status">Último envio confirmado deste aparelho: <strong>${escapeHTML(when)}</strong>${cloudPending?' · <strong>Existem alterações locais pendentes de envio.</strong>':''}</p>
  <div class="setting-actions">
-  <button class="button primary" data-action="drive-recover" ${cloudBusy?'disabled':''}>${ico('download',16)} Recuperar do Google Drive</button>
+  ${!connected&&cloudPending?`<button class="button primary" data-action="drive-connect" ${cloudBusy?'disabled':''}>${ico('cloud',16)} Autorizar Drive e enviar meus registros</button>`:''}
+  <button class="button ${!connected&&cloudPending?'outline':'primary'}" data-action="drive-recover" ${cloudBusy?'disabled':''}>${ico('download',16)} Recuperar do Google Drive</button>
   ${connected?`<button class="button outline" data-action="drive-sync" ${cloudBusy?'disabled':''}>${ico('check',16)} Enviar alterações ao Drive</button>`:''}
  </div>
  ${cloudError?`<p class="cloud-error" role="alert">${escapeHTML(cloudError)}</p>`:''}
@@ -421,8 +422,9 @@ async function completeOnboarding(){
   db.measurements.push(assessment);
   setActiveProgram(generated);
   save();
+  if(!cloud.connected){markCloudPending();drivePromptVisible=true}
   go('dashboard');
-  toast('Plano personalizado criado. Avaliação inicial e fotos salvas neste navegador.');
+  toast('Plano e avaliação salvos localmente. Autorize o Drive para acessá-los em outros dispositivos.');
  }catch(err){
   if(button)button.disabled=false;
   toast('Não foi possível salvar todas as fotos. O cadastro não foi finalizado: '+err.message);
