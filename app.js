@@ -676,6 +676,7 @@ function nutritionPage(){
  const weekMeals=db.meals.filter(m=>m.date>=weekStart&&m.date<=date);
  const weekly=weekMeals.reduce((total,m)=>total+mealTotals(m).kcal,0);
  const entries=[...db.meals].sort((a,b)=>b.date.localeCompare(a.date));
+ const dates=Array.from({length:7},(_,i)=>{const x=new Date(startOfWeek());x.setDate(x.getDate()+i);return todayISO(x)});
  return `${header('REGISTRO ALIMENTAR','Nutrição','Registre todas as refeições, confirme os ingredientes e pesos e acompanhe estimativas energéticas.')}
  <section class="panel section nutrition-note"><h3>Como o cálculo é feito</h3>
  <p>A fotografia documenta o prato; ela <strong>não é analisada automaticamente</strong> nesta versão. Informe os alimentos, peso estimado e valores por 100 g do rótulo ou de uma tabela confiável. Para industrializados, consulte o <a href="https://world.openfoodfacts.org/" target="_blank" rel="noopener noreferrer">Open Food Facts</a> pelo código de barras. Para alimentos brasileiros, consulte também a <a href="https://www.tbca.net.br/" target="_blank" rel="noopener noreferrer">TBCA/USP</a>.</p></section>
@@ -689,6 +690,11 @@ function nutritionPage(){
  <div class="form-field"><label for="meal-photo">Foto do prato (opcional, não analisada)</label><input id="meal-photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></div></div>
  <button class="button primary" data-action="save-meal">Salvar refeição e estimativas</button>
  <p class="disclaimer">Dados nutricionais podem variar por marca, receita, preparo e porção. Sem o peso e valor nutricional por 100 g, não atribuímos calorias fictícias.</p></section>
+ <section class="panel section"><div class="section-head"><h3 class="section-title">Relatório semanal · alimentação e água</h3><span class="section-kicker">Informações informadas pelo usuário</span></div>
+ <div class="body-comparison-overflow"><table class="body-comparison-table"><thead><tr><th>Data</th><th>Refeições</th><th>Energia estimada</th><th>Proteínas</th><th>Água</th></tr></thead><tbody>${dates.map(day=>{
+  const summary=dailyNutrition(db.meals,day);
+  return `<tr><td>${fmtDate(day)}</td><td>${summary.meals}</td><td>${Math.round(summary.kcal).toLocaleString('pt-BR')} kcal</td><td>${summary.proteinG.toLocaleString('pt-BR')} g</td><td>${dailyWater(db.water,day).toLocaleString('pt-BR')} ml</td></tr>`;
+ }).join('')}</tbody></table></div><button class="button outline" data-action="export-wellness-csv">Exportar relatório CSV</button></section>
  <section class="section"><div class="section-head"><h3 class="section-title">Diário alimentar</h3><span class="section-kicker">${entries.length} registro(s)</span></div>
  ${entries.length?`<div class="history-list">${entries.map(mealSummaryRow).join('')}</div>`:'<p class="empty">Nenhuma refeição informada.</p>'}</section>`;
 }
@@ -758,6 +764,7 @@ function waterPage(){
  <button class="button primary" data-action="save-water">Registrar volume</button></div>
  <div class="body-form-grid"><div class="form-field"><label for="water-goal">Meta pessoal opcional (ml/dia)</label><input id="water-goal" type="number" min="500" max="8000" step="100" placeholder="Definida por você ou profissional" value="${goal||''}"></div></div>
  <button class="button outline" data-action="save-water-goal">Salvar minha meta</button>
+ <button class="button outline" data-action="export-wellness-csv">Exportar nutrição e água CSV</button>
  <p class="disclaimer">Não estabelecemos uma meta automática: necessidade de líquidos varia com clima, exercício, alimentação e condições clínicas. O diário registra o que você informa.</p></section>
  <section class="panel section"><div class="section-head"><h3 class="section-title">Últimos dias da semana</h3></div>
  <div class="hydration-week">${days.map(day=>`<div><strong>${fmtDate(day)}</strong><span>${dailyWater(db.water,day).toLocaleString('pt-BR')} ml</span></div>`).join('')}</div></section>
@@ -1010,7 +1017,7 @@ function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)r
  if(a==='quick-water'){saveWater(Number(btn.dataset.ml));return}
  if(a==='delete-water'){if(confirm('Excluir este registro de água?')){const id=btn.dataset.id;db.deleted.water=[...new Set([...db.deleted.water,id])];db.water=db.water.filter(x=>x.id!==id);save();go('agua');}return}
  if(a==='save-water-goal'){const raw=$('#water-goal')?.value;const goal=raw===''?null:Number(raw);if(goal!==null&&(!Number.isInteger(goal)||goal<500||goal>8000)){toast('Informe uma meta pessoal entre 500 e 8.000 ml ou deixe vazio.');return}db.profile.waterGoalMl=goal;save();go('agua');toast('Meta pessoal atualizada.');return}
- if(a==='download-watch-template'){download('\ufeff'+SMARTWATCH_CSV_TEMPLATE,'modelo-smartwatch-forca-em-casa.csv','text/csv;charset=utf-8');return}
+ if(a==='export-wellness-csv'){exportWellnessCSV();return}if(a==='download-watch-template'){download('\ufeff'+SMARTWATCH_CSV_TEMPLATE,'modelo-smartwatch-forca-em-casa.csv','text/csv;charset=utf-8');return}
  if(a==='drive-recover'){recoverCloud();return}if(a==='drive-authorize-assessment'){connectCloud();return}if(a==='drive-consent-later'){drivePromptVisible=false;render();return}if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment'){assessmentEditingId=assessmentEditingId===btn.dataset.id?null:btn.dataset.id;photoEditId=null;render();return}if(a==='save-assessment-edit'){saveAssessmentEdit(btn.dataset.id);return}if(a==='cancel-assessment-edit'){assessmentEditingId=null;render();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;assessmentEditingId=null;render();return}
 if(a==='cancel-photo-editor'){photoEditId=null;render();return}
 if(a==='save-assessment-photos'){saveEditedAssessmentPhotos(btn.dataset.id);return}
