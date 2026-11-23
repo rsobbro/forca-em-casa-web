@@ -534,6 +534,46 @@ async function renderBodyPhotos(){
   }
  }
 }
+function assessmentEditForm(measurement){
+ const textNumber=x=>typeof x==='number'?String(x).replace('.',','):'';
+ return `<section class="panel body-assessment-editor" aria-label="Editar avaliação">
+ <div class="section-head"><h3 class="section-title">Editar medidas e fotos de ${fmtDate(measurement.date)}</h3><span class="section-kicker">Mesmo registro, sem duplicação</span></div>
+ <div class="body-form-grid"><div class="form-field"><label for="edit-body-date">Data</label><input id="edit-body-date" type="date" value="${escapeHTML(measurement.date)}" max="${todayISO()}"></div>
+ ${VISIBLE_BODY_FIELDS.map(field=>`<div class="form-field"><label for="edit-body-${field.key}">${escapeHTML(field.label)} (${field.unit})</label><input id="edit-body-${field.key}" inputmode="decimal" value="${escapeHTML(textNumber(measurement[field.key]))}" placeholder="Opcional"></div>`).join('')}
+ <div class="form-field"><label for="edit-body-notes">Observações</label><textarea id="edit-body-notes" maxlength="500">${escapeHTML(measurement.notes||'')}</textarea></div></div>
+ <h4>Substituir fotografias (opcional)</h4>
+ ${bodyPhotoInputs('body-edit')}
+ <p class="disclaimer">Selecione apenas as fotos que deseja substituir. As demais permanecem no registro. Atualizações são enviadas ao Drive apenas depois da confirmação do upload.</p>
+ <div class="setting-actions"><button class="button primary" data-action="save-assessment-edit" data-id="${escapeHTML(measurement.id)}">Salvar alterações</button><button class="button outline" data-action="cancel-assessment-edit">Cancelar edição</button></div>
+ </section>`;
+}
+async function saveAssessmentEdit(id){
+ const idx=db.measurements.findIndex(x=>x.id===id);
+ if(idx<0){toast('Registro não encontrado.');return}
+ const date=$('#edit-body-date')?.value,notes=String($('#edit-body-notes')?.value||'').trim();
+ if(!validISO(date)||date>todayISO()){toast('Data da avaliação inválida.');return}
+ const values={};
+ for(const field of VISIBLE_BODY_FIELDS){
+  const valueString=$('#edit-body-'+field.key)?.value??'';
+  let value=parsePtNumber(valueString);
+  if(field.key==='heightCm'&&value!==null&&!Number.isNaN(value))value=normalizeHeightCm(value);
+  if(Number.isNaN(value)||value!==null&&(value<field.min||value>field.max)){toast('Confira '+field.label+'.');return}
+  values[field.key]=value;
+ }
+ const updated={...db.measurements[idx],...values,date,notes,updatedAt:new Date().toISOString()};
+ if(!validBodyMeasurement(updated)){toast('Informe pelo menos uma medida válida, além da altura.');return}
+ const photoFiles=collectBodyPhotos('body-edit');if(photoFiles===null)return;
+ const button=app.querySelector('[data-action="save-assessment-edit"]');if(button)button.disabled=true;
+ try{
+  if(Object.keys(photoFiles).length)await saveAssessmentPhotos(id,photoFiles);
+  db.measurements[idx]=updated;assessmentEditingId=null;
+  save();go('avaliacao');
+  toast('Avaliação atualizada sem criar registro duplicado.');
+ }catch(err){
+  if(button)button.disabled=false;
+  toast('Não foi possível salvar as fotos: '+err.message);
+ }
+}
 function photoEditor(id){
  return `<div class="body-photo-editor"><h4>Adicionar ou substituir fotos desta avaliação</h4>${bodyPhotoInputs('photo-edit')}<div class="setting-actions"><button class="button primary" data-action="save-assessment-photos" data-id="${escapeHTML(id)}">Salvar fotos</button><button class="button outline" data-action="cancel-photo-editor">Cancelar</button></div></div>`;
 }
@@ -760,7 +800,7 @@ function assessmentPage(){
  ${measurementPairRow('Braço','armRightCm','armLeftCm')}${measurementPairRow('Comprimento da perna','legRightCm','legLeftCm')}${measurementPairRow('Coxa','thighRightCm','thighLeftCm')}${measurementPairRow('Panturrilha','calfRightCm','calfLeftCm')}</tbody></table></div></section>
  <div class="section grid2">${bodyTrend('weightKg','Evolução do peso','kg')}${bodyTrend('waistCm','Evolução da cintura','cm')}${bodyTrend('rfmPct','Evolução da estimativa RFM','%',fatTrend)}</div>
  <section class="section"><div class="section-head"><h3 class="section-title">Histórico de avaliações e fotos</h3><span class="section-kicker">${values.length} registro(s)</span></div>
- ${values.length?`<div class="history-list">${values.map(x=>`<div class="body-history-card"><div class="history-entry body-record"><div><span class="active-label">AVALIAÇÃO · ${fmtDate(x.date)}</span><h3>${BODY_FIELDS.filter(f=>typeof x[f.key]==='number').map(f=>`${escapeHTML(f.label)}: ${x[f.key].toLocaleString('pt-BR')} ${f.unit}`).join(' · ')}</h3><p class="body-record-fat">${(()=>{const result=estimateBodyFatForAssessment(x,db.measurements,ESTIMATE_SEX);return result.rfm!==null?'RFM estimado: '+result.rfm.toLocaleString('pt-BR')+'% · US Navy: '+(result.navy===null?'aguardando medida do pescoço':result.navy.toLocaleString('pt-BR')+'%'):'Sem cálculo de gordura: falta altura ou cintura nesta avaliação.'})()}</p>${x.notes?`<p>${escapeHTML(x.notes)}</p>`:''}</div><div class="body-history-actions"><button class="button small outline" data-action="edit-assessment-photos" data-id="${escapeHTML(x.id)}">Gerenciar fotos</button><button class="button small danger icon-btn" title="Excluir avaliação" aria-label="Excluir avaliação" data-action="delete-assessment" data-id="${escapeHTML(x.id)}">${ico('trash',14)}</button></div></div>${photoGallery(x.id)}${photoEditId===x.id?photoEditor(x.id):''}</div>`).join('')}</div>`:`<div class="empty"><h3>Nenhuma avaliação registrada ainda.</h3><p>Preencha as medidas acima para estabelecer sua primeira referência.</p></div>`}
+ ${values.length?`<div class="history-list">${values.map(x=>`<div class="body-history-card"><div class="history-entry body-record"><div><span class="active-label">AVALIAÇÃO · ${fmtDate(x.date)}</span><h3>${BODY_FIELDS.filter(f=>typeof x[f.key]==='number').map(f=>`${escapeHTML(f.label)}: ${x[f.key].toLocaleString('pt-BR')} ${f.unit}`).join(' · ')}</h3><p class="body-record-fat">${(()=>{const result=estimateBodyFatForAssessment(x,db.measurements,ESTIMATE_SEX);return result.rfm!==null?'RFM estimado: '+result.rfm.toLocaleString('pt-BR')+'% · US Navy: '+(result.navy===null?'aguardando medida do pescoço':result.navy.toLocaleString('pt-BR')+'%'):'Sem cálculo de gordura: falta altura ou cintura nesta avaliação.'})()}</p>${x.notes?`<p>${escapeHTML(x.notes)}</p>`:''}</div><div class="body-history-actions"><button class="button small outline" data-action="edit-assessment" data-id="${escapeHTML(x.id)}">Editar medidas e fotos</button><button class="button small outline" data-action="edit-assessment-photos" data-id="${escapeHTML(x.id)}">Gerenciar fotos</button><button class="button small danger icon-btn" title="Excluir avaliação" aria-label="Excluir avaliação" data-action="delete-assessment" data-id="${escapeHTML(x.id)}">${ico('trash',14)}</button></div></div>${photoGallery(x.id)}${assessmentEditingId===x.id?assessmentEditForm(x):''}${photoEditId===x.id?photoEditor(x.id):''}</div>`).join('')}</div>`:`<div class="empty"><h3>Nenhuma avaliação registrada ainda.</h3><p>Preencha as medidas acima para estabelecer sua primeira referência.</p></div>`}
  </section>`;
 }
 function saveAssessment(){
@@ -934,7 +974,7 @@ try{
  toast('Backup importado. '+recovered+' foto(s) restaurada(s).');
 }catch(err){toast('Dados importados; fotos não puderam ser importadas: '+err.message)}
 }
-function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='drive-recover'){recoverCloud();return}if(a==='drive-authorize-assessment'){connectCloud();return}if(a==='drive-consent-later'){drivePromptVisible=false;render();return}if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;render();return}
+function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='drive-recover'){recoverCloud();return}if(a==='drive-authorize-assessment'){connectCloud();return}if(a==='drive-consent-later'){drivePromptVisible=false;render();return}if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment'){assessmentEditingId=assessmentEditingId===btn.dataset.id?null:btn.dataset.id;photoEditId=null;render();return}if(a==='save-assessment-edit'){saveAssessmentEdit(btn.dataset.id);return}if(a==='cancel-assessment-edit'){assessmentEditingId=null;render();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;assessmentEditingId=null;render();return}
 if(a==='cancel-photo-editor'){photoEditId=null;render();return}
 if(a==='save-assessment-photos'){saveEditedAssessmentPhotos(btn.dataset.id);return}
 if(a==='delete-assessment'){if(confirm('Excluir esta avaliação corporal e suas fotos neste navegador?')){
