@@ -195,3 +195,27 @@ test('recuperação encontra exatamente as pastas existentes sem novos uploads',
  await client.existingFolders();
  assert.equal(mock.calls.filter(x=>x.method==='POST').length,postsBefore,'Recuperar nunca cria pastas');
 });
+
+test('troca uma foto do Drive somente depois de receber a opção overwrite explícita',async()=>{
+ const mock=mockDrive(),client=createGoogleDriveClient('access',{fetchImpl:mock.fetchImpl});
+ const {photos}=await client.folders();
+ const before=new Blob(['original'],{type:'image/jpeg'});
+ const after=new Blob(['edicao'],{type:'image/jpeg'});
+ await client.writePhoto(photos,'assessment-edit','front',before);
+ const blocked=await client.writePhoto(photos,'assessment-edit','front',after);
+ assert.equal(blocked.skipped,true);
+ assert.equal(blocked.conflict,true);
+ const edited=await client.writePhoto(photos,'assessment-edit','front',after,{overwrite:true});
+ assert.equal(edited.skipped,false);
+ assert.equal(edited.conflict,false);
+ const [record]=(await client.listPhotos(photos)).filter(f=>f.name==='assessment-edit__front.jpg');
+ assert.equal(await (await client.downloadPhoto(record)).text(),'edicao');
+});
+test('UI exige consentimento específico para substituir fotos e preserva as outras vistas',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const app=readFileSync(new URL('../app.js',import.meta.url),'utf8');
+ assert.match(app,/async function uploadConfirmedAssessmentPhotoEdits\(id,views\)/);
+ assert.match(app,/\{overwrite:true\}/);
+ assert.match(app,/confirm\('Substituir apenas as fotografias selecionadas/);
+ assert.match(app,/for\(const view of views\)/);
+});
