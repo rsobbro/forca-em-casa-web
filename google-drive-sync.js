@@ -346,11 +346,22 @@ export function createGoogleDriveClient(accessToken,{fetchImpl=globalThis.fetch}
   const name=drivePhotoName(assessmentId,view);
   const hash=await fingerprint(blob);
   const existing=(await list(folderId,name))[0];
+  const remoteHash=existing?.appProperties?.sha256||null;
   if(existing&&!overwrite){
-   return {id:existing.id,skipped:true,conflict:existing.appProperties?.sha256!==hash};
+   return {id:existing.id,skipped:true,conflict:remoteHash!==hash,hash,remoteHash};
+  }
+  if(existing&&overwrite){
+   // Reuse the exact file ID to avoid duplicate names after replacing
+   // a PNG with a JPEG.
+   await uploadBytes(existing.id,blob,blob.type);
+   await request(API+'/files/'+encodeURIComponent(existing.id)+'?fields=id',{
+    method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({appProperties:{assessmentId,view,sha256:hash}})
+   });
+   return {id:existing.id,skipped:false,conflict:false,hash,remoteHash};
   }
   const id=await upsert(folderId,name,blob,blob.type,{appProperties:{assessmentId,view,sha256:hash}});
-  return {id,skipped:false,conflict:false};
+  return {id,skipped:false,conflict:false,hash,remoteHash};
  }
  async function deleteFile(id){
   if(!id)throw new Error('ID de arquivo inválido.');
