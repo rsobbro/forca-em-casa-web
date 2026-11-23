@@ -1,5 +1,5 @@
 /** Plano inicial baseado na ficha personalizada aprovada na conversa. */
-export const PROGRAM = {
+export let PROGRAM = {
   id: 'home-strength-8w-v1',
   title: 'Força em Casa',
   weeks: 8,
@@ -79,6 +79,8 @@ export const PROGRAM = {
     {week:8,label:'Descarga e avaliação',rpe:'6–7',detail:'Reduza o volume em aproximadamente 40% e reavalie.'}
   ]
 };
+const INITIAL_PROGRAM=PROGRAM;
+export function setActiveProgram(personal){PROGRAM=personal||INITIAL_PROGRAM;return PROGRAM;}
 export function prescribedSets(base, week) {
   if (week===1) return Math.max(1,Math.ceil(base/2));
   if (week===2) return Math.min(2,base);
