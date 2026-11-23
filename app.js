@@ -146,9 +146,10 @@ async function connectCloud(mode='sync'){
  // A abertura do popup OAuth acontece dentro de cloud.connect(), sem await prévio.
  cloudBusy=true;cloudState='solicitando autorização';cloudError='';
  try{
-  const {user}=await cloud.connect();
+  const {user}=await cloud.connect({recoverOnly:mode==='recover'});
   if(AUTH_CONTEXT&&user.sub!==AUTH_CONTEXT.user.sub)throw new Error('A conta do Drive é diferente da conta Gmail do login.');
   const profile=await cloud.loadProfile();
+  if(!profile&&mode==='recover')throw new Error('Não encontrei o cadastro perfil.json nesta conta Google Drive. No computador, sincronize primeiro antes de recuperar no celular.');
   if(!profile&&AUTH_CONTEXT?.profile)await cloud.saveProfile(AUTH_CONTEXT.profile);
   else if(profile&&AUTH_CONTEXT?.profile&&profile.googleSub!==AUTH_CONTEXT.profile.googleSub)
    throw new Error('O cadastro do Google Drive pertence a outra pessoa.');
