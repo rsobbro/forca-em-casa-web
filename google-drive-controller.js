@@ -83,7 +83,7 @@ export class GoogleDriveController {
   this.identity=user;this.user=user;
   return {user};
  }
- async connect(){
+ async connect({recoverOnly=false}={}){
   if(!this.authenticated)throw new Error('Primeiro faça login com seu Gmail.');
   // MUST be called directly from a real user click; no awaits before popup.
   const token=await authorizeDrive(this.clientId,this.googleApi||globalThis.google,this.identity.email);
@@ -95,8 +95,8 @@ export class GoogleDriveController {
   const existingOwner=this.storage?.getItem(DRIVE_OWNER_KEY);
   if(existingOwner&&existingOwner!==user.permissionId)
    throw new Error('Este navegador tem um Drive vinculado a outra conta. Use um perfil separado de navegador.');
-  // Pastas somente após o consentimento explícito para gravar arquivos.
-  const folders=await client.folders();
+  // In recovery mode, never create new cloud folders or replace history.
+  const folders=recoverOnly?await client.existingFolders():await client.folders();
   this.client=client;this.user=user;this.folders=folders;
   return {user,folders};
  }
@@ -144,6 +144,7 @@ export class GoogleDriveController {
   }finally{this.busy=false}
  }
  async restorePhotos(db){
+  if(!this.folders.photos)return {downloaded:0,errors:0};
   const items=await this.client.listPhotos(this.folders.photos);
   const byName=new Map(items.map(file=>[file.name,file]));
   let downloaded=0,errors=0;
