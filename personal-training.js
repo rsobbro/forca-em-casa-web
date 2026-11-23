@@ -10,12 +10,12 @@ export const GOALS=[
  {id:'saude',label:'Saúde e mobilidade'}
 ];
 export const EQUIPMENT_FEATURES=Object.entries(EQUIPMENT).filter(([id])=>id!=='FLOOR').map(([id,name])=>({id,name}));
-export const DAILY_SESSION_OPTIONS=[{value:1,label:'1 sessão por dia (disponível na beta)'}];
+export const DAILY_SESSION_OPTIONS=[{value:1,label:'1 sessão por dia'},{value:2,label:'2 sessões curtas por dia (separadas no tempo)'}];
 const validId=s=>typeof s==='string'&&/^[a-zA-Z0-9._-]{3,128}$/.test(s);
 export function validSetup(setup){
  return !!setup&&setup.complete===true&&GOALS.some(g=>g.id===setup.goal)
  &&Number.isInteger(setup.daysPerWeek)&&setup.daysPerWeek>=1&&setup.daysPerWeek<=5
- &&setup.sessionsPerDay===1
+ &&[1,2].includes(setup.sessionsPerDay)
  &&Number.isInteger(setup.setsPerGroup)&&setup.setsPerGroup>=1&&setup.setsPerGroup<=4
  &&Array.isArray(setup.equipment)&&setup.equipment.length<=10
  &&setup.equipment.every(x=>validId(x.id)&&typeof x.brand==='string'&&x.brand.trim().length>0&&x.brand.length<=80
@@ -67,7 +67,7 @@ export function personalizedProgram(base,setup){
   [['upperPush','upperPull','lower','core'],['lower','upperPull','upperPush','core']];
  const splitSets=setup.goal==='resistencia'?'12–20':setup.goal==='forca'?'6–10':'8–15';
  const templates=base.days;
- const result=days.map((weekday,i)=>{
+ const result=days.flatMap((weekday,i)=>{
   const sequence=categories[i]||categories.at(-1);
   const selected=[],names=new Set();
   for(const cat of sequence){
@@ -80,16 +80,22 @@ export function personalizedProgram(base,setup){
   for(const ex of unique){if(selected.length>=6)break;if(!names.has(ex.name)){names.add(ex.name);selected.push(ex)}}
   if(!selected.length)throw new Error('Nenhum exercício compatível foi encontrado.');
   const template=templates[i]||templates.at(-1);
-  return {...template,id:String.fromCharCode(65+i),weekday,
-   label:setup.daysPerWeek===1?'CORPO INTEIRO':'PERSONALIZADO',
-   name:setup.daysPerWeek===1?'Treino de corpo inteiro':'Treino personalizado '+String.fromCharCode(65+i),
-   intro:'Seleção por funcionalidades confirmadas. Fotos documentam o equipamento, sem reconhecimento automático.',
-   exercises:selected.slice(0,6).map(ex=>({...ex,
-    id:(String.fromCharCode(65+i)).toLowerCase()+'-'+ex.id,
-    sets:setup.setsPerGroup,reps:splitSets,rpe:setup.goal==='saude'?'6–7':'7–8'}))
-  };
+  const parts=setup.sessionsPerDay===2?
+   [selected.slice(0,Math.ceil(selected.length/2)),selected.slice(Math.ceil(selected.length/2),6)]:
+   [selected.slice(0,6)];
+  return parts.map((part,index)=>{
+   const id=String.fromCharCode(65+i)+(setup.sessionsPerDay===2?index+1:'');
+   return {...template,id,weekday,
+    label:setup.daysPerWeek===1?'CORPO INTEIRO':'PERSONALIZADO',
+    name:setup.daysPerWeek===1?'Treino de corpo inteiro '+(index+1):'Treino personalizado '+id,
+    intro:'Seleção por funcionalidades confirmadas. Fotos documentam o equipamento, sem reconhecimento automático. '+(setup.sessionsPerDay===2?'Duas sessões menores, com intervalo de recuperação adequado.':''),
+    exercises:part.map(ex=>({...ex,
+     id:id.toLowerCase()+'-'+ex.id,
+     sets:setup.setsPerGroup,reps:splitSets,rpe:setup.goal==='saude'?'6–7':'7–8'}))
+   };
+  });
  });
- const schedule=Object.fromEntries(result.map(day=>[day.weekday,day.id]));
+ const schedule=Object.fromEntries(result.filter((day,i)=>setup.sessionsPerDay===1||i%2===0).map(day=>[day.weekday,day.id]));
  return {...base,id:'personal-'+setup.goal+'-'+setup.daysPerWeek+'d',
-  schedule,days,weeklyTarget:setup.daysPerWeek,goal:setup.goal};
+  schedule,days:result,weeklyTarget:setup.daysPerWeek*setup.sessionsPerDay,goal:setup.goal};
 }
