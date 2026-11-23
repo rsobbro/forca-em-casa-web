@@ -51,12 +51,16 @@ jobs:
           beta_dir="$(mktemp -d)"
           git archive FETCH_HEAD | tar -x -C "$beta_dir"
           mkdir -p _site/beta/assets
-          for file in index.html styles.css app.js plan.js completion-import.js exercise-media.js activities.js equipment-audit.js exercise-videos.js measurements.js progress.js assessment-photos.js google-drive-sync.js google-drive-controller.js google-config.js registration.js gate.js sw.js manifest.webmanifest .nojekyll; do
+          for file in index.html styles.css app.js plan.js completion-import.js exercise-media.js activities.js equipment-audit.js exercise-videos.js measurements.js progress.js assessment-photos.js google-drive-sync.js google-drive-controller.js google-config.js registration.js gate.js nutrition.js wearables.js personal-training.js rest-alert.js sw.js manifest.webmanifest .nojekyll; do
             # .nojekyll é intencionalmente vazio; testar existência, não tamanho.
             test -f "$beta_dir/$file"
             cp "$beta_dir/$file" "_site/beta/$file"
           done
           cp "$beta_dir"/assets/* _site/beta/assets/
+          test -s _site/beta/nutrition.js
+          test -s _site/beta/wearables.js
+          test -s _site/beta/personal-training.js
+          test -s _site/beta/rest-alert.js
           grep -Fq 'src="./gate.js"' _site/beta/index.html
           grep -Fq "apps.googleusercontent.com" _site/beta/google-config.js
           # A área /beta/ usa recursos e service worker relativos ao próprio caminho.
