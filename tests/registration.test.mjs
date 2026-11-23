@@ -40,7 +40,7 @@ test('site importa o portão de acesso e só então carrega o aplicativo',()=>{
  assert.ok(html.includes('class="auth-locked"'));
  assert.match(gate,/localStorage\.setItem\(profileKey\(authorizedUser\.sub\),JSON\.stringify\(profile\)\)/);
  assert.match(gate,/if\(controller\.connected\)/);
- assert.match(gate,/await controller\.sync\(local\)/);
+ assert.match(gate,/await controller\.recover\(local\)/);
  assert.match(gate,/await import\('\.\/app\.js'\)/);
  assert.match(gate,/validRegistration\(local,user\)/);
  assert.match(gate,/await controller\.authenticate\(\)/);
