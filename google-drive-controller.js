@@ -52,10 +52,19 @@ export function mergeDriveHistories(local,remote,baseline=null){
  records.sessions=records.sessions.filter(x=>x.manual!==true||!detailed.has(x.date+':'+x.dayId));
  records.sessions.sort((a,b)=>b.date.localeCompare(a.date));
  const startDates=[local?.profile?.startDate,remote?.profile?.startDate].filter(x=>typeof x==='string').sort();
- return {db:{version:1,profile:{startDate:startDates[0]||'2026-11-16'},...records,active,deleted},deleted,conflicts};
+ const localSetup=local?.profile?.setup,remoteSetup=remote?.profile?.setup,oldSetup=baseline?.profile?.setup;
+ let setup=localSetup||remoteSetup||null;
+ if(localSetup&&remoteSetup&&!same(localSetup,remoteSetup)){
+  if(oldSetup&&same(oldSetup,localSetup))setup=remoteSetup;
+  else if(oldSetup&&same(oldSetup,remoteSetup))setup=localSetup;
+  else conflicts.push({section:'profile',id:'setup'});
+ }
+ return {db:{version:1,profile:{...remote?.profile,...local?.profile,startDate:startDates[0]||'2026-11-16',
+  ...(setup?{setup}:{})},...records,active,deleted},deleted,conflicts};
 }
 export function hasRecords(db){
- return !!(db?.sessions?.length||db?.activities?.length||db?.measurements?.length||db?.active);
+ return !!(db?.sessions?.length||db?.activities?.length||db?.measurements?.length
+ ||db?.meals?.length||db?.water?.length||db?.profile?.setup||db?.active);
 }
 /**
  * A propriedade owner vincula ESTE perfil local à conta Drive. Uma tentativa
@@ -148,16 +157,16 @@ export class GoogleDriveController {
   const items=await this.client.listPhotos(this.folders.photos);
   const byName=new Map(items.map(file=>[file.name,file]));
   let downloaded=0,errors=0;
-  for(const assessment of db.measurements||[]){
-   const local=await this.photos.getAssessmentPhotos(assessment.id).catch(()=>({}));
+  for(const id of this.photoRecordIds(db)){
+   const local=await this.photos.getAssessmentPhotos(id).catch(()=>({}));
    for(const view of PHOTO_VIEWS){
     if(local?.[view])continue;
-    let filename;try{filename=drivePhotoName(assessment.id,view)}catch{continue}
+    let filename;try{filename=drivePhotoName(id,view)}catch{continue}
     const entry=byName.get(filename);
     if(!entry)continue;
     try{
      const photo=await this.client.downloadPhoto(entry);
-     await this.photos.saveAssessmentPhotos(assessment.id,{[view]:photo});
+     await this.photos.saveAssessmentPhotos(id,{[view]:photo});
      downloaded++;
     }catch{errors++} // Still recover measurements if a photo fails.
    }
@@ -193,11 +202,19 @@ export class GoogleDriveController {
    return {db:merged,lastSync:this.lastSync,photos:photosResult};
   }finally{this.busy=false}
  }
+ photoRecordIds(db){
+  return [
+   ...(db.measurements||[]).map(x=>x.id),
+   ...(db.meals||[]).map(x=>'meal-'+x.id),
+   ...(db.profile?.setup?.equipment||[]).map(x=>'equipment-'+x.id)
+  ];
+ }
  async syncPhotos(db,deleted=normalizeDeleted(null)){
   const remote=await this.client.listPhotos(this.folders.photos);
   const remoteByName=new Map(remote.map(p=>[p.name,p]));
   const stats={uploaded:0,downloaded:0,deleted:0,conflicts:0};
-  const removed=new Set(deleted.measurements||[]);
+  const removed=new Set([...(deleted.measurements||[]),
+   ...(deleted.meals||[]).map(id=>'meal-'+id)]);
   for(const cloud of remote){
    const assessmentId=cloud.appProperties?.assessmentId;
    if(assessmentId&&removed.has(assessmentId)){
@@ -206,8 +223,7 @@ export class GoogleDriveController {
     stats.deleted++;
    }
   }
-  for(const assessment of db.measurements||[]){
-   const id=assessment.id;
+  for(const id of this.photoRecordIds(db)){
    const local=await this.photos.getAssessmentPhotos(id).catch(()=>({}));
    for(const view of PHOTO_VIEWS){
     // The app constrains IDs to stable strings of at most 128 bytes.
