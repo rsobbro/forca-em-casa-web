@@ -111,6 +111,54 @@ export class GoogleDriveController {
   await this.client.writeProfile(this.folders.data,profile);
   return profile;
  }
+ /** Read-only recovery: never uploads an empty or stale phone history over Drive.
+  * Does not replace local records and never overwrites existing local photographs.
+  */
+ async recover(db){
+  if(!this.connected)throw new Error('Autorize o Google Drive antes de recuperar seus dados.');
+  if(this.busy)throw new Error('Já existe uma operação com o Google Drive em andamento.');
+  this.busy=true;
+  try{
+   const owner=this.storage?.getItem(DRIVE_OWNER_KEY);
+   if(owner&&owner!==this.user.permissionId)throw new Error('Esta conta Google é diferente da conta vinculada ao dispositivo.');
+   const remote=await this.client.readHistory(this.folders.data);
+   if(!remote)throw new Error('Nenhum historico.json foi encontrado neste Google Drive. No computador, abra Configurações e confirme a sincronização antes de tentar no celular.');
+   const data=normalizeCloudData(remote);
+   const counts={sessions:data.sessions.length,activities:data.activities.length,measurements:data.measurements.length};
+   if(!counts.sessions&&!counts.activities&&!counts.measurements&&!data.active)
+    throw new Error('O historico.json existe, mas está vazio. Antes de recuperar no celular, sincronize os registros no computador.');
+   const baselineRaw=this.storage?.getItem(BASELINE_PREFIX+this.user.permissionId);
+   let baseline=null;
+   try{baseline=baselineRaw?normalizeCloudData(JSON.parse(baselineRaw)):null}catch{}
+   const result=mergeDriveHistories(db,data,baseline);
+   if(result.conflicts.length)throw new Error('Existem '+result.conflicts.length+' registro(s) com alterações conflitantes. Nenhum dado foi substituído. Faça um backup e resolva o conflito.');
+   const photos=await this.restorePhotos(result.db);
+   // The baseline reflects what was READ from Google, not local pending edits.
+   // Uploading future local changes will therefore use safe three-way merging.
+   if(!owner)this.storage?.setItem(DRIVE_OWNER_KEY,this.user.permissionId);
+   this.storage?.setItem(BASELINE_PREFIX+this.user.permissionId,JSON.stringify(data));
+   this.lastRead=new Date().toISOString();
+   return {db:result.db,remoteCounts:counts,photos,lastRead:this.lastRead};
+  }finally{this.busy=false}
+ }
+ async restorePhotos(db){
+  const items=await this.client.listPhotos(this.folders.photos);
+  const byName=new Map(items.map(file=>[file.name,file]));
+  let downloaded=0;
+  for(const assessment of db.measurements||[]){
+   const local=await this.photos.getAssessmentPhotos(assessment.id).catch(()=>({}));
+   for(const view of PHOTO_VIEWS){
+    if(local?.[view])continue;
+    let filename;try{filename=drivePhotoName(assessment.id,view)}catch{continue}
+    const entry=byName.get(filename);
+    if(!entry)continue;
+    const photo=await this.client.downloadPhoto(entry);
+    await this.photos.saveAssessmentPhotos(assessment.id,{[view]:photo});
+    downloaded++;
+   }
+  }
+  return {downloaded};
+ }
  async sync(db){
   if(!this.connected)throw new Error('Conecte sua conta Google antes de sincronizar.');
   if(this.busy)throw new Error('Já existe uma sincronização em andamento.');
