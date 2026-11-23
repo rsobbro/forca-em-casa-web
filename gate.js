@@ -99,7 +99,7 @@ async function recover(){
  working=true;stage='loading';present('Solicitando autorização para recuperar seu histórico no Drive...');
  try{
   // Called directly by a button interaction; the OAuth popup is opened synchronously.
-  await controller.connect();
+  await controller.connect({recoverOnly:true});
   const profile=await controller.loadProfile();
   if(!profile)throw new Error('Nenhum cadastro anterior foi encontrado no Google Drive desta conta.');
   if(!validRegistration(profile,controller.user))throw new Error('Cadastro anterior pertence a outra conta.');
