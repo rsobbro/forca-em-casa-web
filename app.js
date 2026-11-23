@@ -55,13 +55,15 @@ const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 const initialData=()=>({version:1,profile:{startDate:todayISO()},sessions:[],activities:[],measurements:[],active:null,deleted:{sessions:[],activities:[],measurements:[]}});
 function loadDB(){try{const d=JSON.parse(localStorage.getItem(STORAGE_KEY));if(d&&d.version===1&&Array.isArray(d.sessions)&&d.profile&&typeof d.profile.startDate==='string'){return {version:1,profile:{startDate:d.profile.startDate},sessions:d.sessions,activities:Array.isArray(d.activities)?d.activities.filter(validActivity):[],measurements:Array.isArray(d.measurements)?d.measurements.filter(validBodyMeasurement):[],active:d.active||null,deleted:normalizeDeleted(d.deleted)}}}catch{}return initialData()}
 let db=loadDB();
-let cloudState=AUTH_CONTEXT?.controller?.connected?'sincronizado':'desconectado';
+let cloudState=AUTH_CONTEXT?.controller?.lastSync?'sincronizado':AUTH_CONTEXT?.controller?.lastRead?'recuperado':AUTH_CONTEXT?.controller?.connected?'autorizado':'desconectado';
 let cloudError='';
 let cloudTimer=null;
 let cloudBusy=false;
 let drivePromptVisible=false;
 let assessmentPhotoWrite=Promise.resolve();
 let cloudPending=localStorage.getItem(STORAGE_KEY+'-drive-pending')==='1';
+const lastUploadedToDrive=()=>localStorage.getItem(STORAGE_KEY+'-drive-last-upload');
+const localRecordSummary=()=>({sessions:db.sessions.length,activities:db.activities.length,measurements:db.measurements.length});
 function markCloudPending(){cloudPending=true;localStorage.setItem(STORAGE_KEY+'-drive-pending','1')}
 function markCloudSaved(){cloudPending=false;drivePromptVisible=false;localStorage.removeItem(STORAGE_KEY+'-drive-pending')}
 
@@ -77,7 +79,7 @@ function refreshCloudSyncView(){
   // Reescreve apenas o aviso do Drive: nunca destrói o formulário em edição.
   const banner=app.querySelector?.('.cloud-assessment-banner');
   if(banner)banner.outerHTML=driveAssessmentConsentPanel();
- }else if(route==='configuracoes'||route==='evolucao')render();
+ }else if(['configuracoes','evolucao','dashboard','treinos','atividades'].includes(route))render();
 }
 async function syncCloud(silent=false){
  if(!cloud.connected||cloudBusy)return;
@@ -94,6 +96,7 @@ async function syncCloud(silent=false){
    if(!silent)toast('Histórico enviado, porém há conflito entre fotografias.');
   }else{
    cloudState='sincronizado';markCloudSaved();cloudError='';
+   localStorage.setItem(STORAGE_KEY+'-drive-last-upload',new Date().toISOString());
    if(!silent)toast('Histórico e fotografias confirmados pelo Google Drive.');
   }
  }catch(err){
@@ -109,7 +112,32 @@ async function syncCloud(silent=false){
   refreshCloudSyncView();
  }
 }
-async function connectCloud(){
+async function recoverCloud(){
+ if(!cloud.connected){connectCloud('recover');return}
+ if(cloudBusy)return;
+ cloudBusy=true;cloudState='recuperando';cloudError='';
+ try{
+  const result=await cloud.recover(db);
+  // Only store a merged copy after the read-only recovery succeeds.
+  db=result.db;
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(db));
+  if(result.needsUpload)markCloudPending();
+  else markCloudSaved();
+  cloudState='recuperado';
+  if(result.photos.errors){
+   cloudError=result.photos.errors+' fotografia(s) não puderam ser recuperadas. As medidas e os treinos foram preservados.';
+  }
+  const r=result.remoteCounts;
+  toast('Histórico recuperado do Drive: '+r.sessions+' treino(s), '+r.activities+' atividade(s) e '+r.measurements+' avaliação(ões).');
+ }catch(err){
+  cloudState='erro';cloudError=err instanceof Error?err.message:String(err);
+  toast('Não foi possível recuperar. Seus dados locais permanecem intactos.');
+ }finally{
+  cloudBusy=false;
+  refreshCloudSyncView();
+ }
+}
+async function connectCloud(mode='sync'){
  if(!googleClientIdConfigured(GOOGLE_OAUTH_CLIENT_ID)){
   toast('Falta configurar o Client ID OAuth do Google Cloud.');return;
  }
@@ -134,7 +162,8 @@ async function connectCloud(){
   return;
  }
  cloudBusy=false;
- await syncCloud(false);
+ if(mode==='recover')await recoverCloud();
+ else await syncCloud(false);
 }
 function disconnectCloud(){
  if(cloudTimer)clearTimeout(cloudTimer);
@@ -147,7 +176,7 @@ function disconnectCloud(){
  toast('Google Drive desconectado. Dados locais preservados.');
  if(getRoute()==='configuracoes')render();
 }
-function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(db));scheduleCloudSync()}catch{toast('Não foi possível salvar. Verifique o espaço ou o modo privado do navegador.')}}
+function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(db));markCloudPending();scheduleCloudSync()}catch{toast('Não foi possível salvar. Verifique o espaço ou o modo privado do navegador.')}}
 let selectedDay='A';
 let expandedSession=null;
 let pendingImportMode='replace';
@@ -200,7 +229,7 @@ function completionBanner(){
   return `<section class="panel" aria-label="Registro retroativo de treinos" style="margin-bottom:20px"><div class="section-head"><h3 class="section-title">Confirmar treinos realizados</h3><span class="section-kicker">Registro retroativo</span></div><p style="margin:12px 0"> ${escapeHTML(named)}.</p><p class="disclaimer">Serão registrados somente os dias informados como realizados, sem inventar séries, repetições, cargas ou duração. Dados salvos apenas neste navegador.</p><div class="setting-actions" style="margin-top:15px">${missing.length?`<button class="button primary" data-action="apply-history-link">${ico('check')} Confirmar ${missing.length} ${missing.length===1?'treino':'treinos'}</button>`:`<button class="button primary" data-action="cancel-history-link">Treinos já registrados · Ver painel</button>`}<button class="button outline" data-action="cancel-history-link">Voltar</button></div></section>`;
 }
 function dashboard(){const day=findDay(PROGRAM.schedule[nowWeekDay()]);const week=weekNum();const phase=currentPhase();const isDone=day&&dayCompletedThisWeek(day.id);const total=db.sessions.reduce((s,x)=>s+totalSets(x),0);const last=db.sessions[0];const dayMsg=day?`${day.label} · ${day.name}`:'Recuperação e mobilidade';const cta=db.active?`<button class="button primary" data-action="resume">${ico('play')} Continuar sessão ${db.active.dayId} ${ico('arrow')}</button>`:day?`<button class="button primary" data-action="start" data-day="${day.id}">${ico('play')} ${isDone?'Novo treino':'Iniciar treino'} ${day.id} ${ico('arrow')}</button>`:`<button class="button primary" data-action="view-plans">${ico('layers')} Ver meus treinos ${ico('arrow')}</button>`;
-return `${header('PAINEL DE DESEMPENHO','Seu treino, sua evolução.','Um plano de 8 semanas, preparado para seus equipamentos e sua rotina.')}${completionBanner()}
+return `${header('PAINEL DE DESEMPENHO','Seu treino, sua evolução.','Um plano de 8 semanas, preparado para seus equipamentos e sua rotina.')}${completionBanner()}${cloudRecoveryPanel()}
 <section class="hero"><div class="hero-content"><div class="eyebrow">${day?'TREINO PROGRAMADO PARA HOJE':'HOJE É DIA DE RECUPERAÇÃO'}</div><h2>${day?`Hora de ficar <span>mais forte.</span>`:`Recupere para <span>evoluir.</span>`}</h2><p>${escapeHTML(dayMsg)}. ${day?'Priorize execução controlada, técnica e progressão gradual.':'Caminhada leve e mobilidade são opcionais. O descanso faz parte do treinamento.'}</p><div class="hero-actions">${cta}<span class="subtle">${escapeHTML(phase.label)} · RPE ${phase.rpe}</span></div></div><span class="hero-mark">F.</span></section>${missedTrainingPanel()}
 <div class="body-home"><div><span class="active-label">AVALIAÇÃO CORPORAL</span><h3>Registre peso e medidas para acompanhar sua evolução</h3><p>${db.measurements.length?`Último registro: ${fmtDate(db.measurements.slice().sort((a,b)=>b.date.localeCompare(a.date))[0].date)} · ${db.measurements.length} avaliação(ões)`:'Nenhuma avaliação salva neste dispositivo.'}</p></div><button class="button outline" data-action="view-assessment">${ico('avaliacao',16)} Avaliar corpo</button></div>
 <div class="activity-home"><div><span class="active-label">ATIVIDADES COMPLEMENTARES</span><h3>Corrida, bike, karatê ou natação no seu dia</h3><p>Registre suas atividades, mesmo nos dias em que faz musculação.</p><small>${activityThisWeek().count} atividade(s) · ${activityThisWeek().minutes} minutos nesta semana</small></div><button class="button outline" data-action="view-activities">${ico('activity',17)} Registrar atividade</button></div>
@@ -248,21 +277,38 @@ function periodChart(mode='strength'){
 }
 function sessionDetail(s){if(s.manual)return '<p>Treino concluído por informação do usuário. Não foram informados exercícios, séries, cargas ou repetições.</p>';const day=findDay(s.dayId);if(!day)return '<p>Treino não encontrado.</p>';return day.exercises.map(ex=>{const performed=(s.sets?.[ex.id]||[]).filter(x=>x.done);if(!performed.length)return '';return `<h4>${escapeHTML(recordedExerciseName(s,ex))}</h4><div>${performed.map(x=>`${escapeHTML(x.reps)} reps${x.load?` · ${escapeHTML(x.load)}`:''} · RPE ${escapeHTML(x.rpe)}`).join('<br>')}</div>`}).join('')}
 
+function cloudRecoveryPanel(){
+ if(!AUTH_CONTEXT)return '';
+ const c=localRecordSummary(),connected=cloud.connected;
+ const lastUpload=lastUploadedToDrive();
+ const when=lastUpload?new Date(lastUpload).toLocaleString('pt-BR'):'Nenhum envio confirmado neste navegador';
+ return `<section class="panel cloud-recovery-panel" aria-label="Histórico entre dispositivos">
+ <div class="section-head"><h3 class="section-title">Seus dados no celular e no computador</h3><span class="section-kicker">${connected?'Google Drive autorizado':'Recuperação sob autorização'}</span></div>
+ <p>Histórico disponível <strong>neste dispositivo</strong>: ${c.sessions} treino(s), ${c.activities} atividade(s) e ${c.measurements} avaliação(ões).</p>
+ <p>O login com Gmail não importa os registros automaticamente. Para acessar os mesmos dados de outro aparelho, use <strong>Recuperar do Google Drive</strong>. Essa ação apenas lê e mescla seu histórico, sem substituir o que já está neste dispositivo.</p>
+ <p class="cloud-upload-status">Último envio confirmado deste aparelho: <strong>${escapeHTML(when)}</strong>${cloudPending?' · <strong>Existem alterações locais pendentes de envio.</strong>':''}</p>
+ <div class="setting-actions">
+  <button class="button primary" data-action="drive-recover" ${cloudBusy?'disabled':''}>${ico('download',16)} Recuperar do Google Drive</button>
+  ${connected?`<button class="button outline" data-action="drive-sync" ${cloudBusy?'disabled':''}>${ico('check',16)} Enviar alterações ao Drive</button>`:''}
+ </div>
+ ${cloudError?`<p class="cloud-error" role="alert">${escapeHTML(cloudError)}</p>`:''}
+ </section>`;
+}
 function deviceHistoryNotice(){
- const hasStrength=db.sessions.length>0,hasActivities=db.activities.length>0;
- return `<section class="panel evolution-data-notice" aria-label="Origem dos dados"><div class="section-head"><h3 class="section-title">Histórico deste dispositivo</h3><span class="section-kicker">Armazenamento local</span></div>
- <p>${hasStrength||hasActivities?'Os números abaixo representam os registros guardados neste navegador.':'Este navegador não possui registros de musculação nem de atividades adicionais. Isso não significa que os treinos não ocorreram: eles podem estar em outro aparelho, perfil ou navegador.'}</p>
- <p class="disclaimer">O GitHub Pages publica somente o aplicativo. Não sincroniza seu histórico automaticamente entre celular e computador. Para trazer dados de outro dispositivo, exporte um backup JSON nele e importe aqui pela opção <strong>Mesclar backup</strong>.</p>
- <div class="setting-actions"><button class="button outline" data-action="import-merge">${ico('upload',16)} Mesclar backup JSON</button><button class="button outline" data-action="export-json">${ico('download',16)} Baixar backup deste dispositivo</button></div></section>`;
+ const any=db.sessions.length||db.activities.length;
+ return `<section class="panel evolution-data-notice" aria-label="Origem dos dados"><div class="section-head"><h3 class="section-title">Dados disponíveis neste dispositivo</h3><span class="section-kicker">Armazenamento local e Google Drive</span></div>
+ <p>${any?'Os indicadores usam os registros disponíveis neste navegador, inclusive os recuperados do Google Drive.':'Não existem registros neste navegador. Isso não significa que o histórico do seu computador tenha sido apagado.'}</p>
+ <p class="disclaimer">Para utilizar os mesmos dados no celular e no computador, confirme o envio no aparelho de origem e escolha <strong>Recuperar do Google Drive</strong> neste aparelho. Não é preciso fazer novo cadastro.</p>
+ <div class="setting-actions"><button class="button outline" data-action="import-merge">${ico('upload',16)} Mesclar backup JSON</button><button class="button outline" data-action="export-json">${ico('download',16)} Baixar backup local</button></div></section>`;
 }
 function evolucao(){
  const total=totalProgress(db.sessions,db.activities);
  const monday=startOfWeek(),sunday=new Date(monday);sunday.setDate(sunday.getDate()+6);
  const week=weeklyProgress(db.sessions,db.activities,todayISO(monday),todayISO(sunday));
- return `${header('DADOS DE TREINO','Sua evolução','Musculação e atividades complementares contabilizadas separadamente, com histórico privado neste navegador.',`<button class="button outline" data-action="export-csv">${ico('download')} Exportar CSV</button>`)}
- ${deviceHistoryNotice()}
+ return `${header('DADOS DE TREINO','Sua evolução','Musculação e atividades complementares contabilizadas separadamente, com histórico armazenado localmente e recuperável pelo Google Drive.',`<button class="button outline" data-action="export-csv">${ico('download')} Exportar CSV</button>`)}
+ ${cloudRecoveryPanel()}${deviceHistoryNotice()}
  <div class="evolution-group-title"><h3>Musculação</h3><small>Treinos concluídos · séries informadas separadamente</small></div>
- <div class="grid4">${metric('check','Sessões de força',total.strengthSessions,'Concluídas neste navegador')}${metric('layers','Séries efetivas',total.recordedSets,'Não inclui conclusão manual sem séries')}${metric('pulse','Repetições registradas',total.recordedReps,'Somente séries preenchidas')}${metric('calendar','Semana atual',`${week.strengthDays}/5`,'Divisões A–E nesta semana')}</div>
+ <div class="grid4">${metric('check','Sessões de força',total.strengthSessions,'Disponíveis neste dispositivo')}${metric('layers','Séries efetivas',total.recordedSets,'Não inclui conclusão manual sem séries')}${metric('pulse','Repetições registradas',total.recordedReps,'Somente séries preenchidas')}${metric('calendar','Semana atual',`${week.strengthDays}/5`,'Divisões A–E nesta semana')}</div>
  ${total.manualSessions?`<p class="disclaimer manual-count-notice">${total.manualSessions} treino(s) foram marcados como realizados sem detalhamento: contam na frequência e nas sessões, mas não acrescentam séries ou repetições.</p>`:''}
  <div class="evolution-group-title"><h3>Outras atividades</h3><small>Corrida, bike, karatê, natação e demais atividades</small></div>
  <div class="grid4">${metric('activity','Atividades no histórico',total.otherActivities,'Todas as atividades adicionais')}${metric('clock','Minutos no histórico',total.otherMinutes,'Total informado')}${metric('calendar','Atividades na semana',week.otherActivities,'Além da musculação')}${metric('target','Dias ativos na semana',week.totalActiveDays,'Dias únicos de força ou atividade')}</div>
@@ -518,16 +564,19 @@ function cloudSettingsPanel(){
  const connected=cloud.connected;
  const account=connected?cloud.user?.emailAddress:'';
  const folders=connected?cloud.folders:null;
+ const lastUpload=lastUploadedToDrive();
+ const counts=localRecordSummary();
  const person=AUTH_CONTEXT?.profile;
  const years=person?.birthDate?getAge(person.birthDate):null;
  return `<section class="setting-card cloud-settings" aria-label="Sincronização Google Drive">
   <div class="active-label">05 · CONTA E NUVEM</div>
   <h3 style="margin-top:12px">Conta pessoal e Google Drive</h3>
   ${person?`<div class="cloud-identity"><strong>${escapeHTML(person.name)}</strong><small>Gmail: ${escapeHTML(person.email)} · Idade: ${years??'—'} · Sexo: ${person.sex==='masculino'?'Masculino':person.sex==='feminino'?'Feminino':'Prefiro não informar'}</small></div>`:''}
-  <p>Seu Gmail confirma a identidade, mas <strong>não autoriza o Google Drive automaticamente</strong>. Ao salvar uma avaliação, você decide se permite criar e atualizar arquivos em <strong>Força em Casa / Dados</strong> e <strong>Força em Casa / Fotos</strong>.</p>
+  <p>O Gmail confirma sua identidade, mas não transfere automaticamente o histórico entre aparelhos. Para trazer treinos e avaliações do computador, use <strong>Recuperar do Google Drive</strong>. Os arquivos ficam em <strong>Força em Casa / Dados</strong> e <strong>Força em Casa / Fotos</strong>.</p><p>Registros locais: <strong>${counts.sessions} treino(s), ${counts.activities} atividade(s) e ${counts.measurements} avaliação(ões)</strong>. Último envio confirmado neste aparelho: <strong>${escapeHTML(lastUpload?new Date(lastUpload).toLocaleString('pt-BR'):'não confirmado')}</strong>.</p>
   ${enabled?
    `<div class="cloud-identity"><strong>${connected?'Conectado: '+escapeHTML(account):'Gmail autenticado · Drive ainda não autorizado'}</strong><small>Estado: ${escapeHTML(cloudState)}${cloud.lastSync?' · Última sincronização: '+new Date(cloud.lastSync).toLocaleString('pt-BR'):''}</small></div>
    <div class="setting-actions">
+    <button class="button outline" data-action="drive-recover" ${cloudBusy?'disabled':''}>${ico('download',16)} Recuperar histórico do Google Drive</button>
     <button class="button primary" data-action="drive-connect" ${cloudBusy||connected?'disabled':''}>${ico('cloud',16)} ${connected?'Drive autorizado':'Autorizar Google Drive'}</button>
     ${connected?`<button class="button outline" data-action="drive-sync" ${cloudBusy?'disabled':''}>${ico('check',16)} Sincronizar agora</button><button class="button outline" data-action="drive-disconnect">Sair da conta</button>`:''}
    </div>
@@ -634,7 +683,7 @@ try{
  toast('Backup importado. '+recovered+' foto(s) restaurada(s).');
 }catch(err){toast('Dados importados; fotos não puderam ser importadas: '+err.message)}
 }
-function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='drive-authorize-assessment'){connectCloud();return}if(a==='drive-consent-later'){drivePromptVisible=false;render();return}if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;render();return}
+function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='drive-recover'){recoverCloud();return}if(a==='drive-authorize-assessment'){connectCloud();return}if(a==='drive-consent-later'){drivePromptVisible=false;render();return}if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;render();return}
 if(a==='cancel-photo-editor'){photoEditId=null;render();return}
 if(a==='save-assessment-photos'){saveEditedAssessmentPhotos(btn.dataset.id);return}
 if(a==='delete-assessment'){if(confirm('Excluir esta avaliação corporal e suas fotos neste navegador?')){
