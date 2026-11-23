@@ -588,6 +588,133 @@ function driveAssessmentConsentPanel(){
    ${cloudError?`<p class="cloud-error" role="alert">${escapeHTML(cloudError)}</p>`:''}
    </section>`;
 }
+let mealFoodRows=1;
+function mealFoodRow(index){
+ return `<div class="meal-food-row" data-meal-food="${index}">
+ <div class="section-head"><strong>Alimento ${index+1}</strong><button class="button outline small" type="button" data-action="remove-meal-food" data-index="${index}">Remover</button></div>
+ <div class="body-form-grid">
+  <div class="form-field"><label>Alimento</label><input data-food-name maxlength="120" placeholder="Ex.: arroz cozido / produto do rótulo"></div>
+  <div class="form-field"><label>Peso estimado (g)</label><input data-food-grams inputmode="decimal" placeholder="Ex.: 150"></div>
+  <div class="form-field"><label>Calorias por 100 g (kcal)</label><input data-food-kcal inputmode="decimal" placeholder="Ex.: 130"></div>
+  <div class="form-field"><label>Proteínas por 100 g (g)</label><input data-food-protein inputmode="decimal" placeholder="Opcional"></div>
+  <div class="form-field"><label>Carboidratos por 100 g (g)</label><input data-food-carbs inputmode="decimal" placeholder="Opcional"></div>
+  <div class="form-field"><label>Gorduras por 100 g (g)</label><input data-food-fat inputmode="decimal" placeholder="Opcional"></div>
+  <div class="form-field"><label>Código de barras (produto embalado)</label><input data-food-barcode inputmode="numeric" placeholder="8 a 14 dígitos"></div>
+  <div class="form-field"><label>Fonte da informação</label><select data-food-source><option value="estimativa informada">Estimativa informada</option><option value="rótulo">Rótulo nutricional</option><option value="tabela">Tabela pública de composição</option><option value="Open Food Facts">Open Food Facts</option></select></div>
+ </div>
+ <button class="button outline small" type="button" data-action="lookup-meal-food" data-index="${index}">Consultar Open Food Facts pelo código de barras</button>
+ </div>`;
+}
+function mealSummaryRow(meal){
+ const t=mealTotals(meal);
+ return `<div class="history-entry"><div><span class="active-label">${fmtDate(meal.date)} · ${escapeHTML(MEAL_KINDS.find(k=>k.id===meal.kind)?.label||meal.kind)}</span>
+ <h3>${meal.foods.map(f=>escapeHTML(f.name)+' ('+f.grams+' g)').join(' + ')}</h3>
+ <p>${t.kcal.toLocaleString('pt-BR')} kcal estimadas · ${t.proteinG.toLocaleString('pt-BR')} g proteínas · ${t.carbsG.toLocaleString('pt-BR')} g carboidratos · ${t.fatG.toLocaleString('pt-BR')} g gorduras</p>
+ <small>Valores derivados de informações por 100 g informadas ou consultadas. Não determinados automaticamente pela fotografia.</small>
+ ${meal.notes?`<p>${escapeHTML(meal.notes)}</p>`:''}</div><div class="body-history-actions">
+ <button class="button small danger" data-action="delete-meal" data-id="${escapeHTML(meal.id)}">Excluir</button></div></div><div class="meal-private-photo" data-meal-photo="${escapeHTML(meal.id)}"></div>`;
+}
+function nutritionPage(){
+ const date=todayISO(),sum=dailyNutrition(db.meals,date);
+ const weekStart=todayISO(startOfWeek());
+ const weekMeals=db.meals.filter(m=>m.date>=weekStart&&m.date<=date);
+ const weekly=weekMeals.reduce((total,m)=>total+mealTotals(m).kcal,0);
+ const entries=[...db.meals].sort((a,b)=>b.date.localeCompare(a.date));
+ return `${header('REGISTRO ALIMENTAR','Nutrição','Registre todas as refeições, confirme os ingredientes e pesos e acompanhe estimativas energéticas.')}
+ <section class="panel section nutrition-note"><h3>Como o cálculo é feito</h3>
+ <p>A fotografia documenta o prato; ela <strong>não é analisada automaticamente</strong> nesta versão. Informe os alimentos, peso estimado e valores por 100 g do rótulo ou de uma tabela confiável. Para industrializados, consulte o <a href="https://world.openfoodfacts.org/" target="_blank" rel="noopener noreferrer">Open Food Facts</a> pelo código de barras. Para alimentos brasileiros, consulte também a <a href="https://www.tbca.net.br/" target="_blank" rel="noopener noreferrer">TBCA/USP</a>.</p></section>
+ <div class="grid4">${metric('layers','Refeições hoje',sum.meals,'Registros do dia')}${metric('target','Energia estimada hoje',Math.round(sum.kcal)+' kcal','Pelo peso informado')}${metric('activity','Proteínas hoje',sum.proteinG.toLocaleString('pt-BR')+' g','Estimativa pelas fontes')}${metric('calendar','Energia nesta semana',Math.round(weekly)+' kcal','Segunda até hoje')}</div>
+ <section class="panel section"><div class="section-head"><h3 class="section-title">Registrar refeição</h3><span class="section-kicker">Todas as refeições do dia</span></div>
+ <div class="body-form-grid"><div class="form-field"><label for="meal-date">Data</label><input id="meal-date" type="date" value="${date}" max="${date}"></div>
+ <div class="form-field"><label for="meal-kind">Tipo de refeição</label><select id="meal-kind">${MEAL_KINDS.map(k=>`<option value="${k.id}">${k.label}</option>`).join('')}</select></div></div>
+ <div id="meal-food-list">${mealFoodRow(0)}</div>
+ <button class="button outline" data-action="add-meal-food">Adicionar outro alimento ao prato</button>
+ <div class="body-form-grid"><div class="form-field"><label for="meal-notes">Observações</label><input id="meal-notes" maxlength="500" placeholder="Ingredientes, preparo, medidas caseiras"></div>
+ <div class="form-field"><label for="meal-photo">Foto do prato (opcional, não analisada)</label><input id="meal-photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></div></div>
+ <button class="button primary" data-action="save-meal">Salvar refeição e estimativas</button>
+ <p class="disclaimer">Dados nutricionais podem variar por marca, receita, preparo e porção. Sem o peso e valor nutricional por 100 g, não atribuímos calorias fictícias.</p></section>
+ <section class="section"><div class="section-head"><h3 class="section-title">Diário alimentar</h3><span class="section-kicker">${entries.length} registro(s)</span></div>
+ ${entries.length?`<div class="history-list">${entries.map(mealSummaryRow).join('')}</div>`:'<p class="empty">Nenhuma refeição informada.</p>'}</section>`;
+}
+async function lookupMealFood(index){
+ const row=[...(app.querySelectorAll('[data-meal-food]')||[])].find(x=>Number(x.dataset.mealFood)===index);
+ if(!row)return;
+ const barcode=row.querySelector('[data-food-barcode]')?.value;
+ const btn=row.querySelector('[data-action="lookup-meal-food"]');
+ if(btn)btn.disabled=true;
+ try{
+  const x=await lookupOpenFoodFacts(barcode);
+  for(const [sel,value] of [['[data-food-name]',x.name],['[data-food-kcal]',x.kcalPer100],
+   ['[data-food-protein]',x.proteinPer100],['[data-food-carbs]',x.carbsPer100],['[data-food-fat]',x.fatPer100]]){
+    const el=row.querySelector(sel);if(el&&value!==null&&value!==undefined)el.value=String(value).replace('.',',');
+  }
+  row.querySelector('[data-food-source]').value='Open Food Facts';
+  toast('Produto identificado. Confira a porção e os nutrientes antes de registrar.');
+ }catch(err){toast(err.message)}finally{if(btn)btn.disabled=false}
+}
+async function saveMeal(){
+ const date=$('#meal-date')?.value,kind=$('#meal-kind')?.value;
+ if(!validISO(date)||date>todayISO()){toast('Data da refeição inválida.');return}
+ const rows=[...(app.querySelectorAll('[data-meal-food]')||[])];
+ const foods=rows.map(row=>{
+  const val=sel=>parsePtNumber(row.querySelector(sel)?.value);
+  return {name:String(row.querySelector('[data-food-name]')?.value||'').trim(),
+   grams:val('[data-food-grams]'),kcalPer100:val('[data-food-kcal]'),
+   proteinPer100:val('[data-food-protein]'),carbsPer100:val('[data-food-carbs]'),fatPer100:val('[data-food-fat]'),
+   barcode:String(row.querySelector('[data-food-barcode]')?.value||'').trim(),
+   source:row.querySelector('[data-food-source]')?.value};
+ }).filter(x=>x.name||x.grams!==null);
+ const id=crypto?.randomUUID?.()||'meal-'+Date.now();
+ const record={id,date,kind,foods,notes:String($('#meal-notes')?.value||'').trim()};
+ if(!validMeal(record)){toast('Informe alimentos válidos, gramas e kcal/100g, conferindo a fonte.');return}
+ const photo=$('#meal-photo')?.files?.[0];
+ if(photo&&!validPhotoFile(photo)){toast('Foto inválida. Envie JPEG, PNG ou WebP até 12 MB.');return}
+ try{
+  if(photo)await saveAssessmentPhotos('meal-'+id,{front:photo});
+  db.meals.push(record);save();go('nutricao');
+  toast('Refeição salva. Energia estimada: '+mealTotals(record).kcal.toLocaleString('pt-BR')+' kcal.');
+ }catch(err){toast('Não foi possível salvar a foto: '+err.message)}
+}
+async function renderMealPhotos(){
+ const entries=app.querySelectorAll?.('[data-meal-photo]')||[];
+ for(const el of entries){
+  const id=el.dataset.mealPhoto;
+  try{
+   const photo=(await getAssessmentPhotos('meal-'+id)).front;
+   if(!photo||el.isConnected===false)continue;
+   const url=URL.createObjectURL(photo);photoObjectUrls.push(url);
+   el.innerHTML=`<a href="${url}" target="_blank" rel="noopener noreferrer"><img src="${url}" alt="Foto do prato registrado" loading="lazy"></a>`;
+  }catch{}
+ }
+}
+function waterPage(){
+ const date=todayISO(),today=dailyWater(db.water,date),weekStart=todayISO(startOfWeek());
+ const week=db.water.filter(x=>x.date>=weekStart&&x.date<=date).reduce((n,x)=>n+x.ml,0);
+ const goal=Number(db.profile.waterGoalMl)||0;
+ const days=Array.from({length:7},(_,i)=>{const d=new Date(startOfWeek());d.setDate(d.getDate()+i);return todayISO(d)});
+ const records=[...db.water].sort((a,b)=>b.date.localeCompare(a.date));
+ return `${header('HIDRATAÇÃO','Consumo de água','Registre volumes em mililitros e acompanhe a distribuição diária e semanal.')}
+ <div class="grid4">${metric('activity','Água hoje',(today/1000).toLocaleString('pt-BR')+' L','Consumo registrado')}${metric('calendar','Semana atual',(week/1000).toLocaleString('pt-BR')+' L','Segunda até hoje')}${metric('layers','Registros',records.length,'Histórico total')}${metric('target','Meta pessoal',goal?goal+' ml':'Não definida','Opcional e ajustável')}</div>
+ <section class="panel section"><h3>Registrar água</h3>
+ <div class="body-form-grid"><div class="form-field"><label for="water-date">Data</label><input id="water-date" type="date" value="${date}" max="${date}"></div>
+ <div class="form-field"><label for="water-ml">Volume (ml)</label><input id="water-ml" type="number" min="10" max="5000" step="10" value="250"></div></div>
+ <div class="setting-actions">${[200,250,500].map(ml=>`<button class="button outline" type="button" data-action="quick-water" data-ml="${ml}">+${ml} ml</button>`).join('')}
+ <button class="button primary" data-action="save-water">Registrar volume</button></div>
+ <div class="body-form-grid"><div class="form-field"><label for="water-goal">Meta pessoal opcional (ml/dia)</label><input id="water-goal" type="number" min="500" max="8000" step="100" placeholder="Definida por você ou profissional" value="${goal||''}"></div></div>
+ <button class="button outline" data-action="save-water-goal">Salvar minha meta</button>
+ <p class="disclaimer">Não estabelecemos uma meta automática: necessidade de líquidos varia com clima, exercício, alimentação e condições clínicas. O diário registra o que você informa.</p></section>
+ <section class="panel section"><div class="section-head"><h3 class="section-title">Últimos dias da semana</h3></div>
+ <div class="hydration-week">${days.map(day=>`<div><strong>${fmtDate(day)}</strong><span>${dailyWater(db.water,day).toLocaleString('pt-BR')} ml</span></div>`).join('')}</div></section>
+ <section class="section"><h3>Histórico de água</h3>
+ ${records.length?`<div class="history-list">${records.slice(0,80).map(x=>`<div class="history-entry"><div><strong>${fmtDate(x.date)}</strong><p>${x.ml.toLocaleString('pt-BR')} ml</p></div><button class="button small danger" data-action="delete-water" data-id="${escapeHTML(x.id)}">Excluir</button></div>`).join('')}</div>`:'<p class="empty">Nenhum consumo informado.</p>'}</section>`;
+}
+function saveWater(override=null){
+ const date=$('#water-date')?.value,ml=override??Number($('#water-ml')?.value);
+ const id=crypto?.randomUUID?.()||'water-'+Date.now();
+ const record={id,date,ml};
+ if(!validWater(record)||date>todayISO()){toast('Confira a data e o volume de água.');return}
+ db.water.push(record);save();go('agua');toast(ml+' ml registrados.');
+}
 function assessmentPage(){
  const values=[...db.measurements].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
  const previousHeight=compareMeasure(db.measurements,'heightCm').last;
