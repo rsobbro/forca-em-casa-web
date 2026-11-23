@@ -332,6 +332,100 @@ function evolucao(){
  <div class="section tip-box"><div class="tip-heading">${ico('target')} Progressão de carga</div><p>Quando atingir o limite superior das repetições com boa técnica e RPE adequado, progrida a resistência conforme sua recuperação. Um treino marcado retroativamente sem séries não acrescenta carga ou repetições à evolução.</p></div>
  <div class="section"><div class="section-head"><h3 class="section-title">Histórico de sessões</h3><span class="section-kicker">${total.strengthSessions} ${total.strengthSessions===1?'registro':'registros'}</span></div>${!total.strengthSessions?`<div class="empty">${ico('calendar',34)}<h3>Sem sessões de força neste navegador</h3><p>Se já treinou, marque os dias anteriores no painel acima ou mescle um backup do outro dispositivo. Nenhum registro será criado automaticamente.</p><button class="button primary" data-action="view-plans">${ico('arrow')} Ver meus treinos</button></div>`:`<div class="history-list">${db.sessions.map(s=>`<div><div class="history-entry"><div><span class="active-label">TREINO ${escapeHTML(s.dayId)} · ${escapeHTML(findDay(s.dayId)?.label||'')}</span><h3>${escapeHTML(findDay(s.dayId)?.name||'Treino')} · ${fmtDate(s.date)}</h3><p>${s.manual?'Treino realizado · sem séries, cargas e duração informadas':`${totalSets(s)} séries · ${sessionReps(s)} repetições · ${Number(s.durationMin)||0} min registrados`}</p></div><div class="history-actions"><button class="button small outline" data-action="expand" data-id="${escapeHTML(s.id)}">${expandedSession===s.id?'Ocultar':'Detalhes'} ${ico('chevron',13)}</button><button class="button small danger icon-btn" title="Excluir este treino" aria-label="Excluir treino" data-action="delete-session" data-id="${escapeHTML(s.id)}">${ico('trash',14)}</button></div></div>${expandedSession===s.id?`<div class="history-detail">${sessionDetail(s)}</div>`:''}</div>`).join('')}</div>`}</div>`;
 }
+function equipmentOnboardingRow(index){
+ return `<div class="panel setup-equipment-row" data-equipment-row="${index}">
+ <div class="section-head"><h4>Equipamento ${index+1}</h4><button class="button outline small" type="button" data-action="remove-setup-equipment" data-index="${index}">Remover</button></div>
+ <div class="body-form-grid">
+  <div class="form-field"><label>Marca</label><input data-equipment-brand maxlength="80" placeholder="Ex.: TOPSAND, Kikos, WCT" autocomplete="off"></div>
+  <div class="form-field"><label>Modelo</label><input data-equipment-model maxlength="100" placeholder="Ex.: estação de musculação / kit de elásticos"></div>
+  <div class="form-field"><label>Foto do equipamento (obrigatória)</label><input data-equipment-photo type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></div>
+ </div>
+ <p class="disclaimer">Confirme apenas funções que realmente possui. A foto documenta o equipamento, mas esta versão beta ainda não faz reconhecimento visual automático.</p>
+ <div class="equipment-checks">${EQUIPMENT_FEATURES.map(feature=>`<label><input data-equipment-feature type="checkbox" value="${feature.id}"><span>${escapeHTML(feature.name)}</span></label>`).join('')}</div>
+ </div>`;
+}
+function onboardingPage(){
+ return `${header('CADASTRO INICIAL','Configure seu primeiro treino','Sua meta, equipamentos comprovados e avaliação inicial serão usados para criar um programa seguro e ajustável.')}
+ <section class="panel section"><div class="section-head"><h3 class="section-title">1 · Objetivo e frequência</h3></div>
+ <p>Esta versão cria uma sessão por dia, até cinco dias semanais. Você pode revisar o plano posteriormente.</p>
+ <div class="body-form-grid">
+ <div class="form-field"><label for="setup-goal">Qual é seu objetivo?</label><select id="setup-goal">${GOALS.map(g=>`<option value="${g.id}">${escapeHTML(g.label)}</option>`).join('')}</select></div>
+ <div class="form-field"><label for="setup-days">Quantos dias quer treinar por semana?</label><select id="setup-days">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===3?'selected':''}>${n} dia(s) por semana</option>`).join('')}</select></div>
+ <div class="form-field"><label for="setup-sessions">Treinos por dia</label><select id="setup-sessions"><option value="1">1 sessão por dia (disponível na beta)</option></select></div>
+ <div class="form-field"><label for="setup-sets">Séries por exercício/agrupamento</label><select id="setup-sets">${[1,2,3,4].map(n=>`<option value="${n}" ${n===2?'selected':''}>${n} séries</option>`).join('')}</select></div>
+ </div></section>
+ <section class="panel section"><div class="section-head"><h3 class="section-title">2 · Inventário com fotos</h3></div>
+ <p>Inclua fotos, marca, modelo e as funções disponíveis em cada equipamento. Apenas as funções confirmadas entram na seleção de exercícios.</p>
+ <label class="auth-consent"><input id="setup-bodyweight" type="checkbox"><span>Tenho somente peso corporal/solo (sem equipamento para fotografar)</span></label>
+ <div id="setup-equipment-list">${equipmentOnboardingRow(0)}</div>
+ <button class="button outline" type="button" data-action="add-setup-equipment">Adicionar outro equipamento</button>
+ <p class="disclaimer">Se um equipamento não estiver listado, descreva a marca/modelo e mantenha a foto, mas não selecione uma função diferente da real. O plano usará apenas movimentos verificados.</p>
+ </section>
+ <section class="panel section"><div class="section-head"><h3 class="section-title">3 · Primeira avaliação corporal</h3></div>
+ <p>Informe peso e, quando possível, altura e cintura. Esses dados formam sua avaliação inicial e podem ser corrigidos depois. As fotografias corporais são opcionais.</p>
+ <div class="body-form-grid">
+  <div class="form-field"><label for="setup-weight">Peso inicial (kg) *</label><input id="setup-weight" inputmode="decimal" placeholder="Ex.: 83,3"></div>
+  <div class="form-field"><label for="setup-height">Altura (cm)</label><input id="setup-height" inputmode="decimal" placeholder="Ex.: 173"></div>
+  <div class="form-field"><label for="setup-waist">Cintura (cm)</label><input id="setup-waist" inputmode="decimal" placeholder="Ex.: 99"></div>
+ </div>
+ <h4>Fotografias corporais opcionais</h4>${bodyPhotoInputs('setup-body')}
+ <p class="disclaimer">O percentual de gordura é uma estimativa estatística pelas circunferências; fotos não são usadas para cálculo. Para fotos e dados pessoais, autorize o Drive separadamente quando quiser salvar na nuvem.</p>
+ <button class="button primary" type="button" data-action="complete-onboarding">Salvar avaliação e gerar meu treino</button>
+ </section>`;
+}
+async function completeOnboarding(){
+ const goal=$('#setup-goal')?.value,daysPerWeek=Number($('#setup-days')?.value);
+ const sessionsPerDay=Number($('#setup-sessions')?.value),setsPerGroup=Number($('#setup-sets')?.value);
+ const bodyweight=$('#setup-bodyweight')?.checked;
+ const equipment=[];
+ const files=[];
+ const rows=app.querySelectorAll('[data-equipment-row]')||[];
+ for(const row of rows){
+  const brand=String(row.querySelector('[data-equipment-brand]')?.value||'').trim(),
+   model=String(row.querySelector('[data-equipment-model]')?.value||'').trim(),
+   file=row.querySelector('[data-equipment-photo]')?.files?.[0],
+   features=[...row.querySelectorAll('[data-equipment-feature]:checked')].map(x=>x.value);
+  if(!brand&&!model&&!file&&!features.length)continue;
+  if(!brand||!model||!file||!validPhotoFile(file)||!features.length){
+   toast('Para cada equipamento, informe marca, modelo, foto válida e pelo menos uma função real.');return;
+  }
+  const id=typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():'device-'+Date.now()+'-'+equipment.length;
+  equipment.push({id,brand,model,photoConfirmed:true,features});
+  files.push({id:'equipment-'+id,photo:file});
+ }
+ if(!equipment.length&&!bodyweight){toast('Registre pelo menos um equipamento com foto ou selecione treino de peso corporal.');return}
+ const weight=parsePtNumber($('#setup-weight')?.value);
+ let height=parsePtNumber($('#setup-height')?.value);
+ if(height!==null&&!Number.isNaN(height))height=normalizeHeightCm(height);
+ const waist=parsePtNumber($('#setup-waist')?.value);
+ if(!Number.isFinite(weight)||weight<20||weight>350||height!==null&&(Number.isNaN(height)||height<100||height>240)||waist!==null&&(Number.isNaN(waist)||waist<35||waist>250)){
+  toast('Informe peso inicial válido e confira altura/cintura, quando preenchidas.');return;
+ }
+ const date=todayISO();
+ const assessmentId=typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():'setup-eval-'+Date.now();
+ const assessment={id:assessmentId,date,notes:'Avaliação inicial do primeiro acesso',weightKg:weight,heightCm:height,waistCm:waist};
+ if(!validBodyMeasurement(assessment)){toast('Primeira avaliação inválida.');return}
+ const bodyPhotos=collectBodyPhotos('setup-body');
+ if(bodyPhotos===null)return;
+ const setup={complete:true,goal,daysPerWeek,sessionsPerDay,setsPerGroup,equipment,assessmentId};
+ if(!validSetup(setup)){toast('Configuração inválida. Confira frequência e inventário.');return}
+ const generated=personalizedProgram(PROGRAM,setup);
+ const button=app.querySelector('[data-action="complete-onboarding"]');
+ if(button)button.disabled=true;
+ try{
+  for(const item of files)await saveAssessmentPhotos(item.id,{front:item.photo});
+  if(Object.keys(bodyPhotos).length)await saveAssessmentPhotos(assessmentId,bodyPhotos);
+  db.profile.setup=setup;
+  db.measurements.push(assessment);
+  setActiveProgram(generated);
+  save();
+  go('dashboard');
+  toast('Plano personalizado criado. Avaliação inicial e fotos salvas neste navegador.');
+ }catch(err){
+  if(button)button.disabled=false;
+  toast('Não foi possível salvar todas as fotos. O cadastro não foi finalizado: '+err.message);
+ }
+}
 function activitiesPage(){
  const monday=startOfWeek(),sunday=new Date(monday);sunday.setDate(sunday.getDate()+6);
  const week=activitySummary(db.activities,todayISO(monday),todayISO(sunday));
