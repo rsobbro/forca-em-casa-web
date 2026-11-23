@@ -44,5 +44,5 @@ test('site importa o portão de acesso e só então carrega o aplicativo',()=>{
  assert.match(gate,/await import\('\.\/app\.js'\)/);
  assert.match(gate,/validRegistration\(local,user\)/);
  assert.match(gate,/await controller\.authenticate\(\)/);
- assert.match(gate,/await controller\.connect\(\)/);
+ assert.match(gate,/await controller\.connect\(\{recoverOnly:true\}\)/);
 });
