@@ -34,6 +34,16 @@ const bodyweight=[
  {id:'bw-bird-dog',name:'Bird dog',equipment:'Solo · peso corporal',sets:2,reps:'8–10/lado',rest:45,rpe:'6',focus:'Core · Estabilidade',tip:'Mantenha quadril e costas estáveis.',requires:['FLOOR'],setup:'Em quatro apoios, estenda braço e perna opostos lentamente.'},
  {id:'bw-calf',name:'Panturrilha em pé',equipment:'Solo · peso corporal',sets:2,reps:'12–20',rest:45,rpe:'6–7',focus:'Isolamento · Panturrilha',tip:'Sem saltos ou rebotes.',requires:['FLOOR'],setup:'Ao lado de uma parede, eleve os calcanhares lentamente.'}
 ];
+const optionalEquipmentExercises=[
+ {id:'db-row',name:'Remada unilateral com halter',equipment:'Halter próprio',sets:2,reps:'8–12/lado',rest:75,rpe:'7',focus:'Composto · Costas',tip:'Mantenha o tronco estável, sem rodar.',requires:['DUMBBELLS'],setup:'Use halter seguro, apoio estável e movimento controlado.'},
+ {id:'db-squat',name:'Agachamento goblet com halter',equipment:'Halter próprio',sets:2,reps:'8–12',rest:90,rpe:'7',focus:'Composto · Quadríceps',tip:'Mantenha peso próximo do peito e coluna neutra.',requires:['DUMBBELLS'],setup:'Segure um halter com ambas as mãos e mantenha os pés apoiados.'},
+ {id:'db-press',name:'Desenvolvimento com halteres',equipment:'Par de halteres',sets:2,reps:'8–12',rest:90,rpe:'7',focus:'Composto · Ombros',tip:'Comece com cargas confortáveis e evite arquear a lombar.',requires:['DUMBBELLS'],setup:'Em pé, pressione os halteres acima da cabeça com controle.'},
+ {id:'kb-deadlift',name:'Levantamento terra com kettlebell',equipment:'Kettlebell próprio',sets:2,reps:'8–12',rest:90,rpe:'7',focus:'Composto · Posteriores',tip:'Use dobradiça de quadril com coluna neutra.',requires:['KETTLEBELL'],setup:'Coloque o kettlebell entre os pés e segure a alça com ambas as mãos.'},
+ {id:'band-row',name:'Remada com faixa elástica',equipment:'Faixa elástica',sets:2,reps:'10–15',rest:60,rpe:'7',focus:'Composto · Costas',tip:'Não solte a faixa sob tensão.',requires:['RESISTANCE_BAND'],setup:'Sente-se no solo com a faixa posicionada sob os pés e puxe de forma controlada.'},
+ {id:'db-floor-press',name:'Supino no solo com halteres',equipment:'Halteres e solo',sets:2,reps:'8–12',rest:75,rpe:'7',focus:'Composto · Peitoral',tip:'Amplitude limitada naturalmente pelo solo.',requires:['DUMBBELLS','FLOOR'],setup:'Deitado no solo, mantenha cotovelos e punhos alinhados.'},
+ {id:'bench-step',name:'Subida em banco estável',equipment:'Banco próprio e estável',sets:2,reps:'8–10/lado',rest:75,rpe:'6–7',focus:'Composto · Pernas',tip:'Evite alturas excessivas e superfícies instáveis.',requires:['FLAT_BENCH'],setup:'Use apenas banco específico, firme e com suporte para carga corporal.'},
+ {id:'bar-hang',name:'Suspensão assistida na barra',equipment:'Barra fixa segura',sets:2,reps:'15–30 s',rest:75,rpe:'6',focus:'Composto · Costas',tip:'Mantenha apoio dos pés se necessário.',requires:['PULLUP_BAR'],setup:'Confirme fixação e capacidade da barra antes de apoiar peso.'}
+];
 const focusCategory=exercise=>{
  const s=exercise.focus.toLowerCase();
  if(/peito|peitoral|tríceps|ombro|deltoide/.test(s))return 'upperPush';
@@ -44,7 +54,7 @@ const focusCategory=exercise=>{
 export function personalizedProgram(base,setup){
  if(!validSetup(setup))return base;
  const allowed=new Set(['FLOOR',...setup.equipment.flatMap(e=>e.features)]);
- const library=[...base.days.flatMap(d=>d.exercises),...bodyweight]
+ const library=[...base.days.flatMap(d=>d.exercises),...bodyweight,...optionalEquipmentExercises]
   .filter(ex=>ex.requires.every(key=>allowed.has(key)));
  const unique=[...new Map(library.map(ex=>[ex.name,ex])).values()];
  const byType={upperPush:[],upperPull:[],lower:[],core:[]};
