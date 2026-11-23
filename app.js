@@ -547,6 +547,16 @@ async function renderBodyPhotos(){
   }
  }
 }
+/** Replace only explicitly selected assessment photos in Google Drive after consent. */
+async function uploadConfirmedAssessmentPhotoEdits(id,views){
+ if(!cloud.connected||!views.length)return false;
+ const local=await getAssessmentPhotos(id);
+ for(const view of views){
+  if(!local[view])throw new Error('Fotografia indisponível neste dispositivo.');
+  await cloud.client.writePhoto(cloud.folders.photos,id,view,local[view],{overwrite:true});
+ }
+ return true;
+}
 function assessmentEditForm(measurement){
  const textNumber=x=>typeof x==='number'?String(x).replace('.',','):'';
  return `<section class="panel body-assessment-editor" aria-label="Editar avaliação">
@@ -576,12 +586,21 @@ async function saveAssessmentEdit(id){
  const updated={...db.measurements[idx],...values,date,notes,updatedAt:new Date().toISOString()};
  if(!validBodyMeasurement(updated)){toast('Informe pelo menos uma medida válida, além da altura.');return}
  const photoFiles=collectBodyPhotos('body-edit');if(photoFiles===null)return;
+ const changedViews=Object.keys(photoFiles);
+ const replaceDrive=changedViews.length>0&&cloud.connected&&!cloudBusy&&
+  confirm('Substituir apenas as fotografias selecionadas também no Google Drive? As versões anteriores dessas fotos serão substituídas.');
  const button=app.querySelector('[data-action="save-assessment-edit"]');if(button)button.disabled=true;
  try{
-  if(Object.keys(photoFiles).length)await saveAssessmentPhotos(id,photoFiles);
+  if(changedViews.length)await saveAssessmentPhotos(id,photoFiles);
   db.measurements[idx]=updated;assessmentEditingId=null;
   save();go('avaliacao');
-  toast('Avaliação atualizada sem criar registro duplicado.');
+  if(replaceDrive){
+   try{await uploadConfirmedAssessmentPhotoEdits(id,changedViews)}
+   catch(err){markCloudPending();toast('Avaliação local salva. Substituição no Drive pendente: '+err.message);return}
+  }
+  toast(changedViews.length&&!replaceDrive?
+   'Avaliação atualizada localmente. A troca das fotos no Drive aguarda confirmação.':
+   'Avaliação atualizada sem criar registro duplicado.');
  }catch(err){
   if(button)button.disabled=false;
   toast('Não foi possível salvar as fotos: '+err.message);
@@ -854,14 +873,29 @@ function saveAssessment(){
  else toast('Avaliação salva localmente. Enviando para o Drive autorizado...');
 
 }
-function saveEditedAssessmentPhotos(id){
+async function saveEditedAssessmentPhotos(id){
  if(!db.measurements.some(x=>x.id===id)){toast('Avaliação não localizada.');return}
  const files=collectBodyPhotos('photo-edit');
  if(!files)return;
- if(!Object.keys(files).length){toast('Selecione ao menos uma foto para salvar.');return}
- saveAssessmentPhotos(id,files).then(()=>{
-  photoEditId=null;if(!cloud.connected){markCloudPending();drivePromptVisible=true;}render();if(cloud.connected)scheduleCloudSync();toast(cloud.connected?'Fotos salvas localmente; sincronização iniciada.':'Fotos locais salvas; autorize o Drive para sincronizar.');
- }).catch(err=>toast('Não foi possível salvar as fotos: '+err.message));
+ const views=Object.keys(files);
+ if(!views.length){toast('Selecione ao menos uma foto para salvar.');return}
+ const replaceDrive=cloud.connected&&!cloudBusy&&
+  confirm('Substituir apenas as fotografias selecionadas também no seu Google Drive?');
+ try{
+  await saveAssessmentPhotos(id,files);
+  markCloudPending();
+  photoEditId=null;
+  if(!cloud.connected)drivePromptVisible=true;
+  render();
+  if(replaceDrive){
+   try{await uploadConfirmedAssessmentPhotoEdits(id,views)}
+   catch(err){toast('Fotos locais salvas. Não foi possível substituir no Drive: '+err.message);return}
+   await syncCloud(false);
+  }else{
+   if(cloud.connected)scheduleCloudSync();
+   toast('Fotos salvas neste dispositivo. A atualização no Drive aguarda autorização de substituição.');
+  }
+ }catch(err){toast('Não foi possível salvar as fotos: '+err.message)}
 }
 function exportAssessmentCSV(){
  const headers=['data',...BODY_FIELDS.map(x=>x.key),'observacoes'];
