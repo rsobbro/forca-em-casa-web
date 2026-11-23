@@ -80,6 +80,7 @@ export let PROGRAM = {
   ]
 };
 const INITIAL_PROGRAM=PROGRAM;
+export const BASE_PROGRAM=INITIAL_PROGRAM;
 export function setActiveProgram(personal){PROGRAM=personal||INITIAL_PROGRAM;return PROGRAM;}
 export function prescribedSets(base, week) {
   if (week===1) return Math.max(1,Math.ceil(base/2));
