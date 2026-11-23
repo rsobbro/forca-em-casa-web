@@ -1,4 +1,7 @@
-import {PROGRAM,prescribedSets,findDay} from './plan.js';
+import {PROGRAM,prescribedSets,findDay,setActiveProgram} from './plan.js';
+import {GOALS,EQUIPMENT_FEATURES,validSetup,personalizedProgram} from './personal-training.js';
+import {MEAL_KINDS,validMeal,validWater,foodTotals,mealTotals,dailyNutrition,dailyWater,lookupOpenFoodFacts} from './nutrition.js';
+import {importWatchCsv,SMARTWATCH_CSV_TEMPLATE} from './wearables.js';
 import {GOOGLE_OAUTH_CLIENT_ID} from './google-config.js';
 import {getAge} from './registration.js';
 import {googleClientIdConfigured,normalizeDeleted} from './google-drive-sync.js';
@@ -52,9 +55,19 @@ const nowWeekDay=()=>new Date().getDay();
 const startOfWeek=(date=new Date())=>{const d=new Date(date.getFullYear(),date.getMonth(),date.getDate(),12);d.setDate(d.getDate() - (d.getDay()===0?6:d.getDay()-1));return d;};
 const daysDiff=(a,b)=>Math.round((dateAtLocal(a)-dateAtLocal(b))/(1000*60*60*24));
 const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
-const initialData=()=>({version:1,profile:{startDate:todayISO()},sessions:[],activities:[],measurements:[],active:null,deleted:{sessions:[],activities:[],measurements:[]}});
-function loadDB(){try{const d=JSON.parse(localStorage.getItem(STORAGE_KEY));if(d&&d.version===1&&Array.isArray(d.sessions)&&d.profile&&typeof d.profile.startDate==='string'){return {version:1,profile:{startDate:d.profile.startDate},sessions:d.sessions,activities:Array.isArray(d.activities)?d.activities.filter(validActivity):[],measurements:Array.isArray(d.measurements)?d.measurements.filter(validBodyMeasurement):[],active:d.active||null,deleted:normalizeDeleted(d.deleted)}}}catch{}return initialData()}
+const initialData=()=>({version:1,profile:{startDate:todayISO()},sessions:[],activities:[],measurements:[],meals:[],water:[],active:null,deleted:{sessions:[],activities:[],measurements:[],meals:[],water:[]}});
+function loadDB(){try{const d=JSON.parse(localStorage.getItem(STORAGE_KEY));if(d&&d.version===1&&Array.isArray(d.sessions)&&d.profile&&typeof d.profile.startDate==='string'){return {version:1,profile:{...d.profile,startDate:d.profile.startDate},sessions:d.sessions,
+ activities:Array.isArray(d.activities)?d.activities.map(a=>({...a,distanceKm:a.distanceKm??null,intensity:a.intensity||'Moderada',notes:a.notes||''})).filter(validActivity):[],
+ measurements:Array.isArray(d.measurements)?d.measurements.filter(validBodyMeasurement):[],
+ meals:Array.isArray(d.meals)?d.meals.filter(validMeal):[],
+ water:Array.isArray(d.water)?d.water.filter(validWater):[],
+ active:d.active||null,deleted:normalizeDeleted(d.deleted)}}}catch{}return initialData()}
 let db=loadDB();
+setActiveProgram(personalizedProgram(PROGRAM,db.profile.setup));
+const workoutTarget=()=>PROGRAM.weeklyTarget||5;
+const onboardingRequired=()=>!!AUTH_CONTEXT&&!validSetup(db.profile?.setup)&&!db.sessions.length&&!db.measurements.length;
+let equipmentFormCount=1;
+let assessmentEditingId=null;
 let cloudState=AUTH_CONTEXT?.controller?.lastSync?'sincronizado':AUTH_CONTEXT?.controller?.lastRead?'recuperado':AUTH_CONTEXT?.controller?.connected?'autorizado':'desconectado';
 let cloudError='';
 let cloudTimer=null;
@@ -200,7 +213,7 @@ const completedThisWeek=()=>new Set(sessionsThisWeek().map(s=>s.dayId)).size;
 const activityThisWeek=()=>{const monday=startOfWeek();const end=new Date(monday);end.setDate(end.getDate()+6);return activitySummary(db.activities,todayISO(monday),todayISO(end));};
 const dayCompletedThisWeek=id=>sessionsThisWeek().some(s=>s.dayId===id);
 function toast(msg){const el=$('#toast');el.textContent=msg;el.hidden=false;clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>{el.hidden=true},3900)}
-function getRoute(){const r=location.hash.replace('#','');return ['dashboard','treinos','atividades','avaliacao','evolucao','configuracoes','sessao'].includes(r)?r:'dashboard'}
+function getRoute(){if(onboardingRequired())return 'primeiro-acesso';const r=location.hash.replace('#','');return ['dashboard','treinos','atividades','avaliacao','evolucao','configuracoes','sessao','nutricao','agua','primeiro-acesso'].includes(r)?r:'dashboard'}
 function go(route){location.hash='#'+route;render();window.scrollTo({top:0,behavior:'smooth'})}
 function setActiveNav(route){document.querySelectorAll('[data-nav]').forEach(el=>el.classList.toggle('active',el.dataset.nav===(route==='sessao'?'treinos':route)));const labels={dashboard:'VISÃO GERAL',treinos:'MEUS TREINOS',atividades:'ATIVIDADES',avaliacao:'AVALIAÇÃO CORPORAL',evolucao:'EVOLUÇÃO',configuracoes:'CONFIGURAÇÕES',sessao:'SESSÃO ATIVA'};$('#breadcrumb-label').textContent=labels[route];}
 function header(eyebrow,title,desc,button=''){return `<div class="heading-row"><div><div class="eyebrow">${escapeHTML(eyebrow)}</div><h1 class="page-title">${escapeHTML(title)}</h1><p class="page-desc">${desc}</p></div>${button}</div>`}
