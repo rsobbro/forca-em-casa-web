@@ -431,8 +431,14 @@ function activitiesPage(){
  const monday=startOfWeek(),sunday=new Date(monday);sunday.setDate(sunday.getDate()+6);
  const week=activitySummary(db.activities,todayISO(monday),todayISO(sunday));
  const list=[...db.activities].sort((a,b)=>b.date.localeCompare(a.date));
+ const weekFrom=todayISO(monday),weekTo=todayISO(sunday);
+ const sevenDaysAgo=new Date();sevenDaysAgo.setDate(sevenDaysAgo.getDate()-6);
+ const last7=activitySummary(db.activities,todayISO(sevenDaysAgo),todayISO());
+ const all=activitySummary(db.activities,'1900-01-01',todayISO());
  return `${header('DIÁRIO DE MOVIMENTO','Outras atividades','Corrida, bicicleta, karatê, natação e outras atividades. Registros independentes da musculação.')}
+ <p class="disclaimer">Semana atual: ${fmtDate(weekFrom)} a ${fmtDate(weekTo)}. Atividades registradas em semanas anteriores aparecem abaixo, mas não são somadas à semana atual.</p>
  <div class="grid4">${metric('activity','Atividades na semana',week.count,'Além da musculação')}${metric('clock','Minutos ativos',week.minutes,'Total na semana')}${metric('target','Distância registrada',week.km.toLocaleString('pt-BR')+' km','Quando informada')}${metric('calendar','Dias com atividade',week.days,'Nesta semana')}</div>
+ <div class="activity-period-overview"><strong>Últimos 7 dias:</strong> ${last7.count} atividade(s), ${last7.minutes} min · <strong>Histórico completo:</strong> ${all.count} atividade(s), ${all.minutes} min · <strong>Calorias informadas pelo relógio nesta semana:</strong> ${week.caloriesKcal} kcal</div>
  <section class="panel section" aria-label="Registrar atividade"><div class="section-head"><h3 class="section-title">Registrar atividade</h3><span class="section-kicker">Pode ser no mesmo dia da musculação</span></div>
  <div class="activity-type-grid">${ACTIVITY_TYPES.map(t=>`<div class="activity-type-chip"><span>${t.emoji}</span><span>${escapeHTML(t.label)}</span></div>`).join('')}</div>
  <div class="activity-form-grid">
@@ -441,10 +447,16 @@ function activitiesPage(){
   <div class="form-field"><label for="activity-minutes">Duração (minutos)</label><input id="activity-minutes" type="number" min="1" max="1440" step="1" inputmode="numeric" placeholder="Ex.: 45" /></div>
   <div class="form-field"><label for="activity-distance">Distância (km, opcional)</label><input id="activity-distance" type="text" inputmode="decimal" maxlength="12" placeholder="Ex.: 5,2" /></div>
   <div class="form-field"><label for="activity-intensity">Intensidade percebida</label><select id="activity-intensity">${ACTIVITY_INTENSITIES.map(x=>`<option value="${x}" ${x==='Moderada'?'selected':''}>${x}</option>`).join('')}</select></div>
+  <div class="form-field"><label for="activity-calories">Calorias do relógio (kcal, opcional)</label><input id="activity-calories" type="number" min="0" max="10000" placeholder="Valor exportado pelo dispositivo"></div>
+  <div class="form-field"><label for="activity-heart">Frequência cardíaca média (bpm, opcional)</label><input id="activity-heart" type="number" min="30" max="250" placeholder="Ex.: 135"></div>
   <div class="form-field"><label for="activity-notes">Observações</label><input id="activity-notes" maxlength="500" placeholder="Ex.: aula de karatê ou corrida leve" /></div>
  </div>
- <div class="setting-actions"><button type="button" class="button primary" data-action="save-activity">${ico('check')} Salvar atividade</button></div><p class="disclaimer">Distância e duração são inseridas por você. Não estimamos calorias. Histórico privado neste navegador, incluído nos backups JSON.</p></section>
- <section class="section"><div class="section-head"><h3 class="section-title">Histórico de atividades</h3><span class="section-kicker">${list.length} registro(s)</span></div>${list.length?`<div class="history-list">${list.map(a=>{const t=activityType(a.type);return `<div class="history-entry activity-entry"><div class="activity-entry-info"><span class="activity-entry-icon">${t.emoji}</span><div><span class="active-label">${escapeHTML(t.label)} · ${fmtDate(a.date)}</span><h3>${a.durationMin} minutos${a.distanceKm!==null?' · '+a.distanceKm.toLocaleString('pt-BR')+' km':''}</h3><p>Intensidade: ${escapeHTML(a.intensity)}${a.notes?' · '+escapeHTML(a.notes):''}</p></div></div><button class="button small danger icon-btn" title="Excluir atividade" aria-label="Excluir atividade" data-action="delete-activity" data-id="${escapeHTML(a.id)}">${ico('trash',14)}</button></div>`}).join('')}</div>`:`<div class="empty"><h3>Nenhuma atividade registrada.</h3><p>Preencha o formulário acima para iniciar o diário.</p></div>`}</section>`;
+ <div class="setting-actions"><button type="button" class="button primary" data-action="save-activity">${ico('check')} Salvar atividade</button></div><p class="disclaimer">Distância, duração e métricas manuais são informadas pelo usuário. Calorias e frequência cardíaca são apresentadas apenas quando informadas ou importadas do relógio.</p></section>
+ <section class="panel section"><div class="section-head"><h3 class="section-title">Importar dados do smartwatch</h3></div>
+ <p>Importe um arquivo CSV exportado ou convertido pelo aplicativo do relógio. O modelo inclui data, atividade, duração, distância, calorias, frequência cardíaca média/máxima e passos. Não é uma conexão direta com Apple Health ou Health Connect.</p>
+ <div class="setting-actions"><input id="watch-csv" type="file" accept=".csv,text/csv" aria-label="Arquivo CSV do relógio"><button class="button outline" data-action="download-watch-template">Baixar modelo CSV</button></div>
+ <p class="disclaimer">Os valores importados são atribuídos ao dispositivo de origem e não equivalem a medições realizadas por este site.</p></section>
+ <section class="section"><div class="section-head"><h3 class="section-title">Histórico de atividades</h3><span class="section-kicker">${list.length} registro(s)</span></div>${list.length?`<div class="history-list">${list.map(a=>{const t=activityType(a.type);return `<div class="history-entry activity-entry"><div class="activity-entry-info"><span class="activity-entry-icon">${t.emoji}</span><div><span class="active-label">${escapeHTML(t.label)} · ${fmtDate(a.date)}</span><h3>${a.durationMin} minutos${a.distanceKm!==null?' · '+a.distanceKm.toLocaleString('pt-BR')+' km':''}</h3><p>Intensidade: ${escapeHTML(a.intensity)}${a.caloriesKcal!=null?' · '+a.caloriesKcal+' kcal do relógio':''}${a.heartRateAvg!=null?' · FC média '+a.heartRateAvg+' bpm':''}${a.steps!=null?' · '+a.steps+' passos':''}${a.notes?' · '+escapeHTML(a.notes):''}</p></div></div><button class="button small danger icon-btn" title="Excluir atividade" aria-label="Excluir atividade" data-action="delete-activity" data-id="${escapeHTML(a.id)}">${ico('trash',14)}</button></div>`}).join('')}</div>`:`<div class="empty"><h3>Nenhuma atividade registrada.</h3><p>Preencha o formulário acima para iniciar o diário.</p></div>`}</section>`;
 }
 function saveActivity(){
  const type=$('#activity-kind')?.value,date=$('#activity-date')?.value;
@@ -456,7 +468,9 @@ function saveActivity(){
  if(!Number.isInteger(minutes)||minutes<1||minutes>1440){toast('Duração deve estar entre 1 e 1440 minutos.');return}
  if(distanceText!==''&&!/^\d+(?:\.\d{1,3})?$/.test(distanceText)){toast('Use distância em km, por exemplo 5,2.');return}
  const id=typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():`atividade-${Date.now()}-${Math.random().toString(36).slice(2)}`;
- const record={id,type,date,durationMin:minutes,distanceKm,intensity,notes};
+ const record={id,type,date,durationMin:minutes,distanceKm,intensity,notes,
+  caloriesKcal:$('#activity-calories')?.value?Number($('#activity-calories').value):null,
+  heartRateAvg:$('#activity-heart')?.value?Number($('#activity-heart').value):null,source:'manual'};
  if(!validActivity(record)){toast('Verifique os campos da atividade.');return}
  db.activities.push(record);save();go('atividades');toast('Atividade registrada com sucesso.');
 }
