@@ -138,13 +138,15 @@ export class GoogleDriveController {
    if(!owner)this.storage?.setItem(DRIVE_OWNER_KEY,this.user.permissionId);
    this.storage?.setItem(BASELINE_PREFIX+this.user.permissionId,JSON.stringify(data));
    this.lastRead=new Date().toISOString();
-   return {db:result.db,remoteCounts:counts,photos,lastRead:this.lastRead};
+   // Read-only recovery must never be reported as a successful upload.
+   const needsUpload=!same(result.db,data);
+   return {db:result.db,remoteCounts:counts,photos,needsUpload,lastRead:this.lastRead};
   }finally{this.busy=false}
  }
  async restorePhotos(db){
   const items=await this.client.listPhotos(this.folders.photos);
   const byName=new Map(items.map(file=>[file.name,file]));
-  let downloaded=0;
+  let downloaded=0,errors=0;
   for(const assessment of db.measurements||[]){
    const local=await this.photos.getAssessmentPhotos(assessment.id).catch(()=>({}));
    for(const view of PHOTO_VIEWS){
@@ -152,12 +154,14 @@ export class GoogleDriveController {
     let filename;try{filename=drivePhotoName(assessment.id,view)}catch{continue}
     const entry=byName.get(filename);
     if(!entry)continue;
-    const photo=await this.client.downloadPhoto(entry);
-    await this.photos.saveAssessmentPhotos(assessment.id,{[view]:photo});
-    downloaded++;
+    try{
+     const photo=await this.client.downloadPhoto(entry);
+     await this.photos.saveAssessmentPhotos(assessment.id,{[view]:photo});
+     downloaded++;
+    }catch{errors++} // Still recover measurements if a photo fails.
    }
   }
-  return {downloaded};
+  return {downloaded,errors};
  }
  async sync(db){
   if(!this.connected)throw new Error('Conecte sua conta Google antes de sincronizar.');
