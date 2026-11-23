@@ -248,7 +248,7 @@ return `${header('PAINEL DE DESEMPENHO','Seu treino, sua evolução.','Um plano 
 <section class="hero"><div class="hero-content"><div class="eyebrow">${day?'TREINO PROGRAMADO PARA HOJE':'HOJE É DIA DE RECUPERAÇÃO'}</div><h2>${day?`Hora de ficar <span>mais forte.</span>`:`Recupere para <span>evoluir.</span>`}</h2><p>${escapeHTML(dayMsg)}. ${day?'Priorize execução controlada, técnica e progressão gradual.':'Caminhada leve e mobilidade são opcionais. O descanso faz parte do treinamento.'}</p><div class="hero-actions">${cta}<span class="subtle">${escapeHTML(phase.label)} · RPE ${phase.rpe}</span></div></div><span class="hero-mark">F.</span></section>${missedTrainingPanel()}
 <div class="body-home"><div><span class="active-label">AVALIAÇÃO CORPORAL</span><h3>Registre peso e medidas para acompanhar sua evolução</h3><p>${db.measurements.length?`Último registro: ${fmtDate(db.measurements.slice().sort((a,b)=>b.date.localeCompare(a.date))[0].date)} · ${db.measurements.length} avaliação(ões)`:'Nenhuma avaliação salva neste dispositivo.'}</p></div><button class="button outline" data-action="view-assessment">${ico('avaliacao',16)} Avaliar corpo</button></div>
 <div class="activity-home"><div><span class="active-label">ATIVIDADES COMPLEMENTARES</span><h3>Corrida, bike, karatê ou natação no seu dia</h3><p>Registre suas atividades, mesmo nos dias em que faz musculação.</p><small>${activityThisWeek().count} atividade(s) · ${activityThisWeek().minutes} minutos nesta semana</small></div><button class="button outline" data-action="view-activities">${ico('activity',17)} Registrar atividade</button></div>
-<div class="grid4">${metric('calendar','Treinos na semana',`${completedThisWeek()}/5`,'Dias distintos concluídos')}${metric('check','Sessões concluídas',db.sessions.length,'Histórico salvo neste dispositivo')}${metric('layers','Séries realizadas',total,'Total em todas as sessões')}${metric('target','Semana do ciclo',week>8?'8+':`${week}/8`,week>8?'Ciclo inicial encerrado':phase.label)}</div>
+<div class="grid4">${metric('calendar','Treinos na semana',`${completedThisWeek()}/${workoutTarget()}`,'Dias distintos concluídos')}${metric('check','Sessões concluídas',db.sessions.length,'Histórico salvo neste dispositivo')}${metric('layers','Séries realizadas',total,'Total em todas as sessões')}${metric('target','Semana do ciclo',week>8?'8+':`${week}/8`,week>8?'Ciclo inicial encerrado':phase.label)}</div>
 <div class="section grid2"><div>${schedule()}</div><div class="stack"><div class="phase"><div class="phase-top"><span class="mini-label">PERIODIZAÇÃO</span><span class="phase-pill">SEMANA ${week>8?'8+':week}</span></div><strong>${escapeHTML(phase.label)}</strong><p>${escapeHTML(phase.detail)}</p><div class="progress-track"><div class="progress-fill" style="width:${clamp(week/8*100,0,100)}%"></div></div><div class="phase-foot"><span>Início: ${fmtDate(db.profile.startDate)}</span><span>${Math.min(8,week)} de 8 semanas</span></div></div><div class="tip-box"><div class="tip-heading">${ico('info',17)} Próximo passo</div><p>${last?`Último treino: ${escapeHTML(findDay(last.dayId)?.label||last.dayId)}, em ${fmtDate(last.date)}. Foram registradas ${totalSets(last)} séries.`:'Nenhuma sessão registrada ainda. Abra o treino do dia e acompanhe cada série com a carga ou cor do elástico utilizado.'}</p></div></div></div>
 <div class="section"><div class="section-head"><h3 class="section-title">Sua divisão de treino</h3><button class="button small outline" data-action="view-plans">Ver ficha completa ${ico('arrow',14)}</button></div><div class="grid2">${PROGRAM.days.map(d=>`<button class="micro-card" style="text-align:left;cursor:pointer;color:inherit" data-action="choose-day" data-day="${d.id}"><span class="active-label">TREINO ${d.id} · ${d.label}</span><strong>${escapeHTML(d.name)}</strong><small>${d.exercises.length} exercícios · ${d.duration}</small></button>`).join('')}</div></div><p class="disclaimer">Orientação geral: a ficha não substitui avaliação profissional presencial. Se sentir dor aguda, tontura ou desconforto torácico, interrompa a sessão.</p>`}
 function exercisePhotos(ex,compact=false){
@@ -323,7 +323,7 @@ function evolucao(){
  return `${header('DADOS DE TREINO','Sua evolução','Musculação e atividades complementares contabilizadas separadamente, com histórico armazenado localmente e recuperável pelo Google Drive.',`<button class="button outline" data-action="export-csv">${ico('download')} Exportar CSV</button>`)}
  ${cloudRecoveryPanel()}${deviceHistoryNotice()}
  <div class="evolution-group-title"><h3>Musculação</h3><small>Treinos concluídos · séries informadas separadamente</small></div>
- <div class="grid4">${metric('check','Sessões de força',total.strengthSessions,'Disponíveis neste dispositivo')}${metric('layers','Séries efetivas',total.recordedSets,'Não inclui conclusão manual sem séries')}${metric('pulse','Repetições registradas',total.recordedReps,'Somente séries preenchidas')}${metric('calendar','Semana atual',`${week.strengthDays}/5`,'Divisões A–E nesta semana')}</div>
+ <div class="grid4">${metric('check','Sessões de força',total.strengthSessions,'Disponíveis neste dispositivo')}${metric('layers','Séries efetivas',total.recordedSets,'Não inclui conclusão manual sem séries')}${metric('pulse','Repetições registradas',total.recordedReps,'Somente séries preenchidas')}${metric('calendar','Semana atual',`${week.strengthDays}/${workoutTarget()}`,'Divisões A–E nesta semana')}</div>
  ${total.manualSessions?`<p class="disclaimer manual-count-notice">${total.manualSessions} treino(s) foram marcados como realizados sem detalhamento: contam na frequência e nas sessões, mas não acrescentam séries ou repetições.</p>`:''}
  <div class="evolution-group-title"><h3>Outras atividades</h3><small>Corrida, bike, karatê, natação e demais atividades</small></div>
  <div class="grid4">${metric('activity','Atividades no histórico',total.otherActivities,'Todas as atividades adicionais')}${metric('clock','Minutos no histórico',total.otherMinutes,'Total informado')}${metric('calendar','Atividades na semana',week.otherActivities,'Além da musculação')}${metric('target','Dias ativos na semana',week.totalActiveDays,'Dias únicos de força ou atividade')}</div>
@@ -719,7 +719,7 @@ async function saveMeal(){
    barcode:String(row.querySelector('[data-food-barcode]')?.value||'').trim(),
    source:row.querySelector('[data-food-source]')?.value};
  }).filter(x=>x.name||x.grams!==null);
- const id=crypto?.randomUUID?.()||'meal-'+Date.now();
+ const id=typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():'meal-'+Date.now();
  const record={id,date,kind,foods,notes:String($('#meal-notes')?.value||'').trim()};
  if(!validMeal(record)){toast('Informe alimentos válidos, gramas e kcal/100g, conferindo a fonte.');return}
  const photo=$('#meal-photo')?.files?.[0];
@@ -765,7 +765,7 @@ function waterPage(){
 }
 function saveWater(override=null){
  const date=$('#water-date')?.value,ml=override??Number($('#water-ml')?.value);
- const id=crypto?.randomUUID?.()||'water-'+Date.now();
+ const id=typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():'water-'+Date.now();
  const record={id,date,ml};
  if(!validWater(record)||date>todayISO()){toast('Confira a data e o volume de água.');return}
  db.water.push(record);save();go('agua');toast(ml+' ml registrados.');
@@ -974,7 +974,21 @@ try{
  toast('Backup importado. '+recovered+' foto(s) restaurada(s).');
 }catch(err){toast('Dados importados; fotos não puderam ser importadas: '+err.message)}
 }
-function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;if(a==='drive-recover'){recoverCloud();return}if(a==='drive-authorize-assessment'){connectCloud();return}if(a==='drive-consent-later'){drivePromptVisible=false;render();return}if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment'){assessmentEditingId=assessmentEditingId===btn.dataset.id?null:btn.dataset.id;photoEditId=null;render();return}if(a==='save-assessment-edit'){saveAssessmentEdit(btn.dataset.id);return}if(a==='cancel-assessment-edit'){assessmentEditingId=null;render();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;assessmentEditingId=null;render();return}
+function delegatedClick(e){const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;
+ if(a==='add-setup-equipment'){const target=$('#setup-equipment-list');if(target&&equipmentFormCount<10){target.insertAdjacentHTML('beforeend',equipmentOnboardingRow(equipmentFormCount++));}return}
+ if(a==='remove-setup-equipment'){btn.closest('[data-equipment-row]')?.remove();return}
+ if(a==='complete-onboarding'){completeOnboarding();return}
+ if(a==='add-meal-food'){const list=$('#meal-food-list');if(list&&mealFoodRows<20){list.insertAdjacentHTML('beforeend',mealFoodRow(mealFoodRows++));}return}
+ if(a==='remove-meal-food'){btn.closest('[data-meal-food]')?.remove();return}
+ if(a==='lookup-meal-food'){lookupMealFood(Number(btn.dataset.index));return}
+ if(a==='save-meal'){saveMeal();return}
+ if(a==='delete-meal'){if(confirm('Excluir esta refeição?')){const id=btn.dataset.id;db.deleted.meals=[...new Set([...db.deleted.meals,id])];db.meals=db.meals.filter(x=>x.id!==id);save();removeAssessmentPhotos('meal-'+id).catch(()=>{});go('nutricao');}return}
+ if(a==='save-water'){saveWater();return}
+ if(a==='quick-water'){saveWater(Number(btn.dataset.ml));return}
+ if(a==='delete-water'){if(confirm('Excluir este registro de água?')){const id=btn.dataset.id;db.deleted.water=[...new Set([...db.deleted.water,id])];db.water=db.water.filter(x=>x.id!==id);save();go('agua');}return}
+ if(a==='save-water-goal'){const raw=$('#water-goal')?.value;const goal=raw===''?null:Number(raw);if(goal!==null&&(!Number.isInteger(goal)||goal<500||goal>8000)){toast('Informe uma meta pessoal entre 500 e 8.000 ml ou deixe vazio.');return}db.profile.waterGoalMl=goal;save();go('agua');toast('Meta pessoal atualizada.');return}
+ if(a==='download-watch-template'){download('\ufeff'+SMARTWATCH_CSV_TEMPLATE,'modelo-smartwatch-forca-em-casa.csv','text/csv;charset=utf-8');return}
+ if(a==='drive-recover'){recoverCloud();return}if(a==='drive-authorize-assessment'){connectCloud();return}if(a==='drive-consent-later'){drivePromptVisible=false;render();return}if(a==='drive-connect'){connectCloud();return}if(a==='drive-sync'){syncCloud(false);return}if(a==='drive-disconnect'){disconnectCloud();return}if(a==='view-assessment'){go('avaliacao');return}if(a==='save-assessment'){saveAssessment();return}if(a==='export-assessment-csv'){exportAssessmentCSV();return}if(a==='edit-assessment'){assessmentEditingId=assessmentEditingId===btn.dataset.id?null:btn.dataset.id;photoEditId=null;render();return}if(a==='save-assessment-edit'){saveAssessmentEdit(btn.dataset.id);return}if(a==='cancel-assessment-edit'){assessmentEditingId=null;render();return}if(a==='edit-assessment-photos'){photoEditId=photoEditId===btn.dataset.id?null:btn.dataset.id;assessmentEditingId=null;render();return}
 if(a==='cancel-photo-editor'){photoEditId=null;render();return}
 if(a==='save-assessment-photos'){saveEditedAssessmentPhotos(btn.dataset.id);return}
 if(a==='delete-assessment'){if(confirm('Excluir esta avaliação corporal e suas fotos neste navegador?')){
@@ -985,7 +999,20 @@ if(a==='delete-assessment'){if(confirm('Excluir esta avaliação corporal e suas
 app.addEventListener('click',delegatedClick);
 $('#timer').addEventListener('click',delegatedClick);
 app.addEventListener('input',e=>{if(['body-heightCm','body-waistCm','body-neckCm','body-hipsCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();if(e.target.matches('[data-edit]')){persistEdit(e.target);const container=e.target.closest?.('.session-exercise');const feedback=container?.querySelector?.('[data-set-feedback]');if(feedback)feedback.hidden=true;e.target.closest?.('tr')?.classList?.remove('set-invalid');}});
-app.addEventListener('change',e=>{
+app.addEventListener('change',async e=>{
+ if(e.target.id==='watch-csv'){
+  const file=e.target.files?.[0];if(!file)return;
+  if(file.size>2*1024*1024){toast('CSV deve ter no máximo 2 MB.');return}
+  try{
+   const parsed=importWatchCsv(await file.text());
+   const ids=new Set(db.activities.map(a=>a.id));
+   const extra=parsed.filter(a=>!ids.has(a.id));
+   db.activities.push(...extra);
+   if(extra.length)save();
+   go('atividades');toast(extra.length+' atividade(s) importada(s); '+(parsed.length-extra.length)+' já existente(s).');
+  }catch(err){toast('Falha na importação: '+err.message)}
+  return;
+ }
  if(e.target.matches('[data-edit]'))persistEdit(e.target);
  if(['body-heightCm','body-waistCm','body-neckCm','body-hipsCm','body-weightKg','body-date'].includes(e.target.id))updateBodyFatPreview();
  if(e.target.dataset?.photoInput){
