@@ -4,6 +4,8 @@
  * A conexão cria Força em Casa/{Dados,Fotos} no Drive do usuário autenticado.
  * Até a configuração do OAuth, a aplicação continua inteiramente local.
  */
+import {validMeal,validWater} from './nutrition.js';
+import {validSetup} from './personal-training.js';
 export const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 export const GOOGLE_IDENTITY_SCOPES='openid email profile';
 export const GOOGLE_AUTH_SCOPES=GOOGLE_IDENTITY_SCOPES+' '+GOOGLE_DRIVE_SCOPE;
@@ -68,6 +70,10 @@ export function normalizeCloudData(data){
  ||(data.meals!==undefined&&!Array.isArray(data.meals))
  ||(data.water!==undefined&&!Array.isArray(data.water)))
  throw new Error('O histórico excede os limites de segurança.');
+ if(data.meals?.some(x=>!validMeal(x))||data.water?.some(x=>!validWater(x)))
+  throw new Error('O histórico do Drive contém refeições ou hidratação com dados inválidos. Os registros locais não foram substituídos.');
+ if(data.profile.setup!=null&&!validSetup(data.profile.setup))
+  throw new Error('A configuração de treino no Google Drive está incompleta ou inválida. O histórico local foi preservado.');
  return {version:1,profile:{...data.profile},
   sessions:data.sessions,activities:data.activities,measurements:data.measurements,
   meals:Array.isArray(data.meals)?data.meals:[],
