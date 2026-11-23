@@ -256,6 +256,16 @@ export function createGoogleDriveClient(accessToken,{fetchImpl=globalThis.fetch}
   const photos=await ensureFolder(root,DRIVE_PHOTOS_FOLDER);
   return {root,data,photos};
  }
+ async function existingFolders(){
+  // Recovery should never create an empty folder tree on another device.
+  const roots=await list('root',DRIVE_APP_FOLDER);
+  const root=roots.find(x=>x.mimeType===FOLDER_MIME);
+  if(!root)throw new Error('Não encontrei a pasta Força em Casa neste Google Drive. No computador, confirme que a sincronização foi concluída.');
+  const data=(await list(root.id,DRIVE_DATA_FOLDER)).find(x=>x.mimeType===FOLDER_MIME);
+  if(!data)throw new Error('Não encontrei a pasta Dados neste Google Drive. Envie seu histórico pelo computador antes de recuperar no celular.');
+  const photos=(await list(root.id,DRIVE_PHOTOS_FOLDER)).find(x=>x.mimeType===FOLDER_MIME);
+  return {root:root.id,data:data.id,photos:photos?.id||null};
+ }
  async function uploadBytes(id,bytes,mimeType){
   return asJson(await request(UPLOAD+'/files/'+encodeURIComponent(id)+'?'+new URLSearchParams({uploadType:'media',fields:'id,name,size,modifiedTime'}),{
    method:'PATCH',headers:{'Content-Type':mimeType},body:bytes
@@ -334,5 +344,5 @@ export function createGoogleDriveClient(accessToken,{fetchImpl=globalThis.fetch}
   if(!id)throw new Error('ID de arquivo inválido.');
   await request(API+'/files/'+encodeURIComponent(id),{method:'DELETE'});
  }
- return {about,list,folders,readHistory,writeHistory,readProfile,writeProfile,listPhotos,downloadPhoto,writePhoto,deleteFile};
+ return {about,list,folders,existingFolders,readHistory,writeHistory,readProfile,writeProfile,listPhotos,downloadPhoto,writePhoto,deleteFile};
 }
