@@ -130,7 +130,7 @@ test('telas e ações estão integradas, sem fingir reconhecimento de imagens',(
  assert.match(app,/playRestSound\(\)/);
  assert.match(app,/importWatchCsv\(await file.text\(\)\)/);
  assert.match(app,/function completeOnboarding\(/);
- assert.match(app,/sem reconhecimento automático/);
+ assert.match(app,/não faz reconhecimento visual automático/);
  for(const mod of ['nutrition.js','wearables.js','personal-training.js','rest-alert.js'])
   assert.ok(cache.includes(mod));
 });
