@@ -177,3 +177,21 @@ test('não usa login_hint não verificado e protege resposta em erro OAuth',asyn
  ])assert.match(describeGoogleOAuthFailure(code),new RegExp(fragment,'i'));
  assert.doesNotMatch(describeGoogleOAuthFailure('x<SENSITIVE-TOKEN>'),/SENSITIVE-TOKEN/);
 });
+
+test('recuperação não cria pastas se não existir histórico na conta',async()=>{
+ const mock=mockDrive(),client=createGoogleDriveClient('oauth-token',{fetchImpl:mock.fetchImpl});
+ await assert.rejects(client.existingFolders(),/Não encontrei a pasta Força em Casa/);
+ assert.equal(mock.files.length,0,'Não criar nenhuma pasta ao tentar recuperar');
+ assert.equal(mock.calls.filter(x=>x.method==='POST').length,0);
+});
+test('recuperação encontra exatamente as pastas existentes sem novos uploads',async()=>{
+ const mock=mockDrive(),client=createGoogleDriveClient('oauth-token',{fetchImpl:mock.fetchImpl});
+ const created=await client.folders();
+ const before=mock.files.length;
+ const found=await client.existingFolders();
+ assert.deepEqual(found,created);
+ assert.equal(mock.files.length,before);
+ const postsBefore=mock.calls.filter(x=>x.method==='POST').length;
+ await client.existingFolders();
+ assert.equal(mock.calls.filter(x=>x.method==='POST').length,postsBefore,'Recuperar nunca cria pastas');
+});
