@@ -299,7 +299,7 @@ function sessionDetail(s){
   const performed=Array.isArray(sets)?sets.filter(x=>x.done):[];
   if(!performed.length)return '';
   const ex=current.find(x=>x.id===id);
-  const name=s.exerciseNames?.[id]||ex?.name||LEGACY_EXERCISE_NAMES[id]||'Exercício registrado';
+  const name=ex?recordedExerciseName(s,ex):(s.exerciseNames?.[id]||LEGACY_EXERCISE_NAMES[id]||'Exercício registrado');
   return `<h4>${escapeHTML(name)}</h4><div>${performed.map(x=>`${escapeHTML(String(x.reps))} reps${x.load?' · '+escapeHTML(String(x.load)):''} · RPE ${escapeHTML(String(x.rpe))}`).join(' · ')}</div>`;
  }).join('');
 }
