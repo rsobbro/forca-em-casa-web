@@ -145,3 +145,32 @@ body.auth-locked #app-content{max-width:100%;width:100%;padding:0!important;marg
 .auth-recover-first .button{display:block;width:100%}
 .auth-new-profile-caption{font-size:12px;color:#b6cbbf;font-weight:650;margin-top:22px}
 @media(max-width:640px){.cloud-recovery-panel{padding:15px}.cloud-recovery-panel .setting-actions{flex-direction:column}.cloud-recovery-panel .button{width:100%}}
+
+/* V1.8 beta — onboarding, dieta, hidratação e relógios */
+.setup-equipment-row{margin:13px 0;padding:18px;border:1px solid #3e5950;border-radius:12px}
+.setup-equipment-row .section-head{align-items:center}
+.equipment-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:240px;overflow-y:auto;border:1px solid #3c554e;border-radius:12px;padding:12px;margin-top:12px}
+.equipment-checks label{display:flex;align-items:flex-start;gap:9px;font-size:12px;line-height:1.4;cursor:pointer}
+.equipment-checks label input{margin-top:3px;flex-shrink:0}
+.meal-food-row{padding:16px;margin:14px 0;border:1px solid #40574d;background:#142621;border-radius:13px}
+.meal-food-row .section-head{align-items:center}
+.meal-private-photo img{width:min(200px,100%);max-height:160px;object-fit:cover;border-radius:10px;margin:8px 12px;border:1px solid #40624d}
+.hydration-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin:14px 0}
+.hydration-week>div{padding:12px 6px;border:1px solid #354d48;background:#142420;border-radius:10px;text-align:center;min-width:0}
+.hydration-week strong,.hydration-week span{display:block;font-size:11px}
+.hydration-week span{color:#cdf29e;margin-top:7px;font-weight:750}
+.activity-period-overview{padding:14px 16px;border:1px solid #3d604f;border-radius:12px;background:#183026;font-size:12px;line-height:1.8;margin:14px 0}
+.body-assessment-editor{margin:16px 0;padding:18px;background:#193128;border:1px solid #77a66c;border-radius:13px}
+.body-assessment-editor .setting-actions{display:flex;gap:10px;flex-wrap:wrap}
+.nutrition-note p{line-height:1.75;color:var(--muted)}
+.nutrition-note a{color:var(--lime)}
+.auth-consent{margin:12px 0}
+@media(max-width:900px){.hydration-week{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:640px){
+ .equipment-checks{grid-template-columns:1fr}
+ .hydration-week{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .setup-equipment-row,.meal-food-row{padding:12px}
+ .mobile-nav{overflow-x:auto;justify-content:flex-start}
+ .mobile-nav a{flex:0 0 64px;min-width:64px}
+ .body-assessment-editor .setting-actions{flex-direction:column}
+}
