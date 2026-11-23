@@ -71,7 +71,7 @@ test('cria pastas e historico.json no Drive do usuário autorizado, lê novament
  const snapshot={version:1,profile:{startDate:'2026-11-16'},sessions:[],activities:[],measurements:[],active:null};
  assert.equal(await client.readHistory(dirs.data),null);
  await client.writeHistory(dirs.data,snapshot);
- assert.deepEqual(await client.readHistory(dirs.data),{...snapshot,deleted:{sessions:[],activities:[],measurements:[]}});
+ assert.deepEqual(await client.readHistory(dirs.data),{...snapshot,meals:[],water:[],deleted:{sessions:[],activities:[],measurements:[],meals:[],water:[]}});
  assert.equal(mock.files.filter(x=>x.name==='historico.json').length,1);
  const profile={version:1,googleSub:'12345678901234567890',googlePermissionId:'owner-1',email:'teste@gmail.com',name:'Nome Teste',birthDate:'1985-04-12',sex:'masculino',consentVersion:'1.0',createdAt:'2026-11-18T10:00:00.000Z',updatedAt:'2026-11-18T10:00:00.000Z'};
  assert.equal(await client.readProfile(dirs.data),null);

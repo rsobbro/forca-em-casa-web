@@ -22,5 +22,5 @@ test('resumo semanal soma sessões e evita duplicar dias',()=>{
     {date:'2026-11-18',durationMin:45,distanceKm:1.2},
     {date:'2026-11-09',durationMin:20,distanceKm:2}
   ];
-  assert.deepEqual(activitySummary(entries,'2026-11-16','2026-11-22'),{count:3,minutes:135,km:6.2,days:2});
+  assert.deepEqual(activitySummary(entries,'2026-11-16','2026-11-22'),{count:3,minutes:135,km:6.2,days:2,caloriesKcal:0,withHeartRate:0});
 });
