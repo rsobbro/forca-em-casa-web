@@ -12,26 +12,29 @@
   <link rel="stylesheet" href="./styles.css" />
   <title>Força em Casa — Meu treino</title>
 </head>
-<body>
+<body class="auth-locked">
   <div class="app-shell">
     <aside class="sidebar">
       <a class="brand" href="#dashboard" aria-label="Ir para o início">
         <span class="brand-symbol">F<span class="brand-dot">.</span></span>
-        <span class="brand-copy">FORÇA EM CASA<small>TRAINING SYSTEM / V1.4.1</small></span>
+        <span class="brand-copy">FORÇA EM CASA<small>TRAINING SYSTEM / V1.8.0 (BETA)</small></span>
       </a>
       <div class="sidebar-label">MENU PRINCIPAL</div>
       <nav class="side-nav" aria-label="Navegação principal">
         <a href="#dashboard" data-nav="dashboard" class="nav-link"><span data-nav-icon="dashboard"></span> Visão geral</a>
         <a href="#treinos" data-nav="treinos" class="nav-link"><span data-nav-icon="treinos"></span> Meus treinos</a>
         <a href="#atividades" data-nav="atividades" class="nav-link"><span data-nav-icon="activity"></span> Atividades</a>
+        <a href="#nutricao" data-nav="nutricao" class="nav-link"><span data-nav-icon="layers"></span> Nutrição</a>
+        <a href="#agua" data-nav="agua" class="nav-link"><span data-nav-icon="calendar"></span> Água</a>
+        <a href="#primeiro-acesso" data-nav="primeiro-acesso" class="nav-link"><span data-nav-icon="treinos"></span> Meu inventário</a>
         <a href="#avaliacao" data-nav="avaliacao" class="nav-link"><span data-nav-icon="avaliacao"></span> Avaliação corporal</a>
         <a href="#evolucao" data-nav="evolucao" class="nav-link"><span data-nav-icon="evolucao"></span> Evolução</a>
         <a href="#configuracoes" data-nav="configuracoes" class="nav-link"><span data-nav-icon="configuracoes"></span> Configurações</a>
       </nav>
       <div class="sidebar-bottom">
         <div class="equipment-pill"><span class="signal"></span> TREINO DOMÉSTICO</div>
-        <p>WCT Fitness <span>+</span> Elásticos TOPSAND <span>+</span> Minibands Alegria</p>
-        <div class="sidebar-foot">Plano individual · 5 dias/semana</div>
+        <p>Inventário pessoal <span>+</span> exercícios verificados</p>
+        <div class="sidebar-foot">Plano ajustado à sua meta, frequência e equipamentos</div>
       </div>
     </aside>
     <div class="content-shell">
@@ -40,14 +43,16 @@
         <div class="topbar-breadcrumb">PERSONAL TRAINING <span>/</span> <strong id="breadcrumb-label">VISÃO GERAL</strong></div>
         <div class="topbar-right"><span id="top-date"></span><div class="avatar" title="Treino individual">F</div></div>
       </header>
-      <main id="app-content" tabindex="-1" aria-live="polite"></main>
-      <footer class="app-footer"><span>FORÇA EM CASA · V1.4.1</span><span>Dados armazenados somente neste navegador.</span></footer>
+      <main id="app-content" tabindex="-1" aria-live="polite"><p class="auth-splash">Preparando acesso seguro ao Força em Casa…</p></main>
+      <footer class="app-footer"><span>FORÇA EM CASA · V1.8.0 (BETA)</span><span>Treinos, avaliações, nutrição e água · armazenamento local e Drive autorizado.</span></footer>
     </div>
   </div>
   <nav class="mobile-nav" aria-label="Navegação móvel">
     <a href="#dashboard" data-nav="dashboard"><span data-nav-icon="dashboard"></span><small>Início</small></a>
     <a href="#treinos" data-nav="treinos"><span data-nav-icon="treinos"></span><small>Treinos</small></a>
     <a href="#atividades" data-nav="atividades"><span data-nav-icon="activity"></span><small>Atividades</small></a>
+    <a href="#nutricao" data-nav="nutricao"><span data-nav-icon="layers"></span><small>Nutrição</small></a>
+    <a href="#agua" data-nav="agua"><span data-nav-icon="calendar"></span><small>Água</small></a>
     <a href="#avaliacao" data-nav="avaliacao"><span data-nav-icon="avaliacao"></span><small>Avaliação</small></a>
     <a href="#evolucao" data-nav="evolucao"><span data-nav-icon="evolucao"></span><small>Evolução</small></a>
     <a href="#configuracoes" data-nav="configuracoes"><span data-nav-icon="configuracoes"></span><small>Ajustes</small></a>
@@ -55,6 +60,7 @@
   <div id="timer" class="timer-bar" hidden aria-live="off"></div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <input type="file" id="import-file" accept="application/json,.json" hidden />
-  <script type="module" src="./app.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script type="module" src="./gate.js"></script>
 </body>
 </html>

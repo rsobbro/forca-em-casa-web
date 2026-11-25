@@ -55,15 +55,19 @@ export function mergeHistory(current,incoming){
  };
  const extra=mergeItems(current.activities||[],incoming.activities||[]);
  const body=mergeItems(current.measurements||[],incoming.measurements||[]);
+ const meals=mergeItems(current.meals||[],incoming.meals||[]);
+ const water=mergeItems(current.water||[],incoming.water||[]);
  const startDate=[current.profile?.startDate,incoming.profile?.startDate].filter(validDate).sort()[0];
  return {
    db:{
-     version:1,profile:{startDate},
+     version:1,profile:{...incoming.profile,...current.profile,startDate,
+      setup:current.profile?.setup||incoming.profile?.setup||null},
      sessions:mergedSessions.sort((a,b)=>b.date.localeCompare(a.date)),
-     activities:extra.items,
-     measurements:body.items,
+     activities:extra.items,measurements:body.items,
+     meals:meals.items,water:water.items,
+     deleted:current.deleted||incoming.deleted||undefined,
      active:current.active||incoming.active||null
    },
-   addedSessions,updatedSessions,addedActivities:extra.added,addedMeasurements:body.added
+   addedSessions,updatedSessions,addedActivities:extra.added,addedMeasurements:body.added,addedMeals:meals.added,addedWater:water.added
  };
 }

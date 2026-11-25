@@ -7,6 +7,14 @@ export const EQUIPMENT={
  TOPSAND_ANCHOR:'Kit TOPSAND · âncora de porta original',
  TOPSAND_ANKLE:'Kit TOPSAND · tornozeleiras originais',
  ALEGRIA_MINIBAND:'Kit Alegria · minibands',
+ DUMBBELLS:'Par de halteres · marca e modelo informados pelo usuário',
+ KETTLEBELL:'Kettlebell · peso e pegada confirmados',
+ FLAT_BENCH:'Banco firme e estável · sem improvisação',
+ RESISTANCE_BAND:'Faixa elástica de resistência · sem ancoragem de porta',
+ PULLUP_BAR:'Barra fixa corretamente instalada · suporte seguro',
+ STATIONARY_BIKE:'Bicicleta ergométrica · uso aeróbico, sem prescrição de força',
+ TREADMILL:'Esteira ergométrica · uso aeróbico, sem prescrição de força',
+ OTHER_UNVERIFIED:'Outro equipamento descrito (não gera exercícios até revisão)',
  FLOOR:'Solo e peso corporal · sem aparelho adicional'
 };
 export const INVENTORY_NOTICE='A polia inferior, a cadeira extensora, o leg press e funções adicionais não foram confirmados para este modelo WCT. Não improvise caminhos de cabo nem adaptadores.';

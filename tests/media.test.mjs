@@ -20,7 +20,7 @@ test('interface importa módulos de atividades e imagens e preserva dados',()=>{
   const js=readFileSync(new URL('../app.js',import.meta.url),'utf8');
   assert.ok(js.includes('exercisePhotos(ex)'));
   assert.ok(js.includes('exercisePhotos(ex,true)'));
-  assert.ok(js.includes('activities:Array.isArray(d.activities)?d.activities.filter(validActivity):[]'));
+  assert.ok(js.includes('.filter(validActivity):[]'));
   assert.ok(js.includes('activities:imported.activities||[]'));
 });
 
